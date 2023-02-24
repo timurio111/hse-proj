@@ -1,12 +1,15 @@
 import pygame
 import os
+from screeninfo import get_monitors
 from button import Button
 
 pygame.init()
-WIDTH, HEIGHT = 1000, 800
+monitor = get_monitors()[0]
+
+WIDTH, HEIGHT = monitor.width, monitor.height
 MAX_FPS = 60
 
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
+screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
 
 EXIT_GAME_EVENT = pygame.event.Event(pygame.QUIT)
 START_GAME_EVENT = pygame.event.Event(pygame.USEREVENT + 1)
@@ -23,12 +26,12 @@ class Menu:
     def __init__(self):
         self.visible = True
         self.background = load_background("gradient2.png")
-        self.button_start = Button(size=(WIDTH // 3, WIDTH // 6),
-                                   pos=(WIDTH // 2 - WIDTH // 6, HEIGHT // 2),
+        self.button_start = Button(size=(WIDTH // 4, HEIGHT // 12),
+                                   pos=(WIDTH // 2 - WIDTH // 8, HEIGHT // 2),
                                    event=START_GAME_EVENT,
                                    text="Start")
-        self.button_exit = Button(size=(WIDTH // 3, WIDTH // 6),
-                                  pos=(WIDTH // 2 - WIDTH // 6, HEIGHT // 2 + WIDTH // 6 + 10),
+        self.button_exit = Button(size=(WIDTH // 4, HEIGHT // 12),
+                                  pos=(WIDTH // 2 - WIDTH // 8, HEIGHT // 2 + HEIGHT // 6),
                                   event=EXIT_GAME_EVENT,
                                   text="Quit")
 
