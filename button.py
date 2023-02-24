@@ -2,14 +2,17 @@ import pygame
 
 
 class Button:
-    def __init__(self, size, pos, text="", border_width=2, event=None):
+    def __init__(self, size, pos, text="", border_width=2, font=None, event=None):
         self.event = event
+
+
         self.border_width = border_width
         self.hover = False
         self.pressed = False
 
         self.width = size[0]
         self.height = size[1]
+        self.font = pygame.font.Font(font, self.height)
 
         self.x = pos[0]
         self.y = pos[1]
@@ -26,8 +29,9 @@ class Button:
         temp = pygame.Surface((self.width - 2 * self.border_width, self.height - 2 * self.border_width))
         temp.fill(color)
         frame.blit(temp, (self.border_width, self.border_width))
-        font = pygame.font.Font(None, frame.get_height())
-        text_surf = font.render(self.text, True, (0, 0, 0))
+
+
+        text_surf = self.font.render(self.text, True, (0, 0, 0))
         factor = 0.9 / max(text_surf.get_width() / self.width, text_surf.get_height() / self.height)
         text_surf = pygame.transform.scale_by(text_surf, factor)
         frame.blit(text_surf, (self.width // 2 - text_surf.get_width() // 2,

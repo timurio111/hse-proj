@@ -21,8 +21,8 @@ def load_background(image_name: str) -> pygame.Surface:
     return image.convert()
 
 
-def load_image(image_name,
-               height_to_monitor_size):  # height_to_monitor_size обозначает, какая высота дожлна быть у элемента относительно высоты окна игры
+def load_image(image_name: str, height_to_monitor_size: float) -> pygame.Surface:  # height_to_monitor_size обозначает, какая высота дожлна быть у элемента относительно высоты окна игры
+
     image_raw = pygame.image.load(image_name).convert_alpha()
     Koeff = (HEIGHT * height_to_monitor_size * (1 / image_raw.get_height()))
     width = image_raw.get_width() * Koeff // 1
@@ -33,16 +33,11 @@ def load_image(image_name,
 
 class Menu:
     def __init__(self):
+
         self.visible = True
         self.background = load_background("gradient2.png")
-        self.button_start = Button(size=(WIDTH // 4, HEIGHT // 12),
-                                   pos=(WIDTH // 2 - WIDTH // 8, HEIGHT // 2),
-                                   event=START_GAME_EVENT,
-                                   text="Start")
-        self.button_exit = Button(size=(WIDTH // 4, HEIGHT // 12),
-                                  pos=(WIDTH // 2 - WIDTH // 8, HEIGHT // 2 + HEIGHT // 6),
-                                  event=EXIT_GAME_EVENT,
-                                  text="Quit")
+        self.button_start = Button(size=(WIDTH // 4, HEIGHT // 12), pos=(WIDTH // 2 - WIDTH // 8, HEIGHT // 2), event=START_GAME_EVENT, text="Play", font='data/fonts/menu_font.ttf')
+        self.button_exit = Button(size=(WIDTH // 4, HEIGHT // 12), pos=(WIDTH // 2 - WIDTH // 8, HEIGHT // 2 + HEIGHT // 6), event=EXIT_GAME_EVENT, text="Quit", font='data/fonts/menu_font.ttf')
 
     def draw(self, screen):
         screen.blit(self.background, (0, 0))
@@ -52,29 +47,30 @@ class Menu:
 
 class Player(pygame.sprite.Sprite):
 
-    def __init__(self, pos, size, dir_for_sprites, *groups):
+    def __init__(self, pos, size, scale ,dir_for_sprites, *groups):
         super().__init__(*groups)
-
         self.v = 20
         self.vx = 0
         self.vy = 0
         self.counter = 0
-        self.animations = dict()  # Словарь c анимациями
-        self.animations_counter = 0  # Анимационный счетчик кадра
-        self.frame_number = 0  # Связанный с animations.counter счетчик. Говорит, какой кадр нужно показывать
-        self.all_frames = 4  # Сколько кадров для текущего статуса
+
+        self.animations = dict()      # Словарь c анимациями
+        self.animations_counter = 0   # Анимационный счетчик кадра
+        self.frame_number = 0         # Связанный с animations.counter счетчик. Говорит, какой кадр нужно показывать
+        self.all_frames = 4           # Сколько кадров для текущего статуса
         self.frames_change_rate = 10  # Через сколько итераций менять кадр
-        self.status = 'Idle'  # Текущий статус. Должен совпадать с названием папки с анимацией!!!
+        self.status = 'Idle'          # Текущий статус. Должен совпадать с названием папки с анимацией!!!
         self.direction = 'right'
-        for i in os.listdir(dir_for_sprites):
+        self.scale = scale
+
+        for i in os.listdir(dir_for_sprites):     # Подгружаем все анимации и заодно отзеркаливаем их
             self.animations[i + 'right'] = dict()
             self.animations[i + 'left'] = dict()
             for j in os.listdir(dir_for_sprites + '/' + i):
-                self.animations[i + 'right'][int(j.split('.')[0]) - 1] = load_image(dir_for_sprites + '/' + i + '/' + j, 0.2)
-                self.animations[i + 'left'][int(j.split('.')[0]) - 1] = pygame.transform.flip(load_image(dir_for_sprites + '/' + i + '/' + j,
-                                                                                  0.2), flip_x=True, flip_y=False)
-        self.rect = self.animations['Idle' + 'right'][0].get_rect()
-        print(self.animations)
+                self.animations[i + 'right'][int(j.split('.')[0]) - 1] = load_image(dir_for_sprites + '/' + i + '/' + j, self.scale)
+                self.animations[i + 'left'] [int(j.split('.')[0]) - 1] = pygame.transform.flip(load_image(dir_for_sprites + '/' + i + '/' + j, self.scale), flip_x=True, flip_y=False)
+
+        self.rect = self.animations['Idle' + 'right'][0].get_rect()  #Заполнили словарь с анимациями и взяли примерный прямоугольник персонажа по первому фрейму из Idle
 
     def move(self, dx, dy):
         self.rect.x += dx
@@ -125,8 +121,6 @@ class Player(pygame.sprite.Sprite):
             self.vy = 0
             self.rect.y = HEIGHT - self.rect.height
             self.counter = 0
-
-
         else:
             self.counter += 1
         self.move(self.vx, self.vy)
@@ -144,9 +138,9 @@ class Player(pygame.sprite.Sprite):
 class Game:
     def __init__(self):
         self.visible = True
-        self.btn_back = Button((100, 50), (10, 10), "To menu", event=GO_TO_MENU_EVENT)
+        self.btn_back = Button((100, 50), (10, 10), "To menu", event=GO_TO_MENU_EVENT, font='data/fonts/menu_font.ttf')
         self.background = load_background("gradient1.png")
-        self.player = Player((WIDTH // 2, HEIGHT // 2), (100, 200), 'data/Player_sprites')
+        self.player = Player((WIDTH // 2, HEIGHT // 2), (100, 200), 0.1 , 'data/Player_sprites' )
 
     def draw(self, screen):
         screen.blit(self.background, (0, 0))
@@ -187,7 +181,6 @@ def main(screen):
             if event == GO_TO_MENU_EVENT:
                 menu.visible = True
                 game.visible = False
-
         if menu.visible:
             menu.draw(screen)
         elif game.visible:
