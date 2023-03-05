@@ -5,7 +5,6 @@ class Button:
     def __init__(self, size, pos, text="", border_width=2, font=None, event=None):
         self.event = event
 
-
         self.border_width = border_width
         self.hover = False
         self.pressed = False
@@ -30,7 +29,6 @@ class Button:
         temp.fill(color)
         frame.blit(temp, (self.border_width, self.border_width))
 
-
         text_surf = self.font.render(self.text, True, (0, 0, 0))
         factor = 0.9 / max(text_surf.get_width() / self.width, text_surf.get_height() / self.height)
         text_surf = pygame.transform.scale_by(text_surf, factor)
@@ -38,8 +36,8 @@ class Button:
                                self.height // 2 - text_surf.get_height() // 2))
         return frame
 
-    def draw(self, screen: pygame.Surface):
-        self.update()
+    def draw(self, screen: pygame.Surface, scale):
+        self.update(scale)
         if self.pressed:
             image = self.image_pressed
         elif self.hover:
@@ -48,8 +46,9 @@ class Button:
             image = self.image_default
         screen.blit(image, (self.x, self.y))
 
-    def update(self):
+    def update(self, scale):
         mouse_pos = pygame.mouse.get_pos()
+        mouse_pos = (mouse_pos[0] // scale, mouse_pos[1] // scale)
         if self.rect.collidepoint(mouse_pos):
             self.hover = True
             if pygame.mouse.get_pressed()[0]:
