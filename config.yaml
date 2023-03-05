@@ -1,0 +1,5 @@
+APP:
+  FULLSCREEN: True
+  RESOLUTION: 1920*1080
+  MAX_FPS: 60 # -1 - неограничено
+
