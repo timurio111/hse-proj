@@ -1,40 +1,23 @@
 import pygame
 import os
+import config
 from button import Button
+from level import Level
+from player import Player
+from config import WIDTH, HEIGHT, MAX_FPS, FULLSCREEN
 
 pygame.init()
-monitor = pygame.display.get_desktop_sizes()[0]
 
-WIDTH, HEIGHT = monitor
-MAX_FPS = 60
-
-screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
+if FULLSCREEN:
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
+    config.HEIGHT = screen.get_height()
+    config.WIDTH = screen.get_width()
+else:
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
 EXIT_GAME_EVENT = pygame.event.Event(pygame.QUIT)
 START_GAME_EVENT = pygame.event.Event(pygame.USEREVENT + 1)
 GO_TO_MENU_EVENT = pygame.event.Event(pygame.USEREVENT + 2)
-
-
-def load_character_sprites(name: str, scale: int, size: (int, int)) -> dict[str, list[pygame.surface.Surface]]:
-    path = os.path.join("data", "PlayerSprites", name)
-    sprites_dict: dict[str, list[pygame.surface.Surface]] = dict()
-
-    for filename in os.listdir(path):
-        state = filename.replace('.png', '')
-        sprites_dict[state + "_right"] = []
-        sprites_dict[state + "_left"] = []
-
-        sprite_sheet = pygame.image.load(os.path.join(path, filename))
-
-        sprites_count = sprite_sheet.get_width() // size[0]
-        for i in range(sprites_count):
-            sprite = sprite_sheet.subsurface((size[0] * i, 0), size)
-            sprite = pygame.transform.scale(sprite, (size[0] * scale, size[1] * scale))
-
-            sprites_dict[state + "_right"].append(sprite)
-            sprites_dict[state + "_left"].append(pygame.transform.flip(sprite, True, False))
-
-    return sprites_dict
 
 
 def load_background(image_name: str) -> pygame.Surface:
@@ -55,137 +38,114 @@ class Menu:
 
     def draw(self, screen):
         screen.blit(self.background, (0, 0))
-        self.button_start.draw(screen)
-        self.button_exit.draw(screen)
+        self.button_start.draw(screen, 1)
+        self.button_exit.draw(screen, 1)
 
 
-class Player(pygame.sprite.Sprite):
-
-    def __init__(self, pos, size, scale):
-        super().__init__()
-        self.sprite: pygame.Surface = None
-        self.mask: pygame.Mask = None
-        self.rect: pygame.Rect = pygame.rect.Rect(pos, (size[0] * scale, size[1] * scale))
-        self.v = 5
-        self.vx = 0
-        self.vy = 0
-        self.off_ground_counter = 0
-        self.animations = load_character_sprites("Character", scale, size)
-        self.animations_counter = 0
-        self.frames_change_rate = 3
-        self.status = 'idle'
-        self.direction = 'right'
-        self.sprite_animation_counter = 0
-
-    def move(self, dx, dy):
-        self.rect.x += dx
-        self.rect.y += dy
-
-    def update_sprite(self):
-        status = 'idle'
-
-        if self.vy < 0:
-            status = 'jump'
-        elif self.vy > 2:
-            status = 'fall'
-        elif self.vx != 0:
-            status = 'run'
-        sprite_name = status + '_' + self.direction
-        sprite_index = (self.sprite_animation_counter // self.frames_change_rate) % len(self.animations[sprite_name])
-        self.sprite = self.animations[sprite_name][sprite_index]
-        self.mask = pygame.mask.from_surface(self.sprite)
-        self.sprite_animation_counter += 1
-        self.move(self.vx, self.vy)
-
-    def move_left(self):
-        self.direction = 'left'
-        self.vx = -self.v
-
-    def move_right(self):
-        self.direction = 'right'
-        self.vx = self.v
-
-    def jump(self):
-        if self.off_ground_counter < 2:
-            self.vy = -self.v * 2
-
-    def touch_down(self):
-        self.off_ground_counter = 0
-        self.vy = 0
-
-    def loop(self, fps):
-        self.move(self.vx, self.vy)
-        self.vy += min(1, self.off_ground_counter / fps * 10)
-        self.off_ground_counter += 1
-        self.update_sprite()
-
-    def draw(self, screen):
-        screen.blit(self.sprite, self.rect)
-
-
-class Obstacle(pygame.sprite.Sprite):
-    def __init__(self, pos: (int, int), size: (int, int)):
-        super().__init__()
-        self.rect = pygame.Rect(*pos, *size)
-        self.image = pygame.Surface(size)
-        self.image.fill((50, 50, 100))
-        self.mask = pygame.mask.from_surface(self.image)
-
-    def draw(self, screen):
-        screen.blit(self.image, self.rect)
-
-lJ
 class Game:
-    def __init__(self):
+    def __init__(self, clock):
+        self.clock: pygame.time.Clock = clock
+        self.offset_x, self.offset_y = 0, 0
         self.visible = True
-        self.btn_back = Button((100, 50), (10, 10), "To menu", event=GO_TO_MENU_EVENT, font='data/fonts/menu_font.ttf')
-        self.background = load_background("gradient1.png")
-        self.player = Player((WIDTH // 2, HEIGHT // 2), (120, 80), 4)
-        self.obstacles = [Obstacle((0, HEIGHT - 100), (WIDTH, 100)),
-                          Obstacle((100, HEIGHT - 150), (WIDTH // 2, 300)),
-                          Obstacle((100, HEIGHT - 200), (WIDTH // 3, 100))]
+        self.btn_back = Button((20, 10), (10, 10), "To menu", event=GO_TO_MENU_EVENT, font='data/fonts/menu_font.ttf')
+        self.level = Level('testmap')
+        self.player = Player((100, 0), 1, "Character")
+
+    def update(self):
+        fps = self.clock.get_fps()
+        self.player.loop(fps)
+        self.input_handle(fps)
 
     def draw(self, screen):
-        screen.blit(self.background, (0, 0))
-        for obstacle in self.obstacles:
-            obstacle.draw(screen)
-        self.player.draw(screen)
-        self.btn_back.draw(screen)
+        self.update()
+        self.offset_x = -self.player.rect.x - self.player.rect.width // 2 + WIDTH // self.level.scale // 2
+        self.offset_y = -self.player.rect.y - self.player.rect.height + HEIGHT // self.level.scale // 2
+        self.level.draw(screen, self.offset_x, self.offset_y)
+        self.player.draw(screen, self.offset_x, self.offset_y)
 
-    def input_handle(self):
+    def input_handle(self, fps):
+        time_delta = 1 / fps
         keys = pygame.key.get_pressed()
+        collide_vertical = self.collision_y()
+        collide_left = self.collision_x(min(-1, -int(self.player.v * time_delta)) * 2)
+        collide_right = self.collision_x(max(1, int(self.player.v * time_delta)) * 2)
+
         self.player.vx = 0
-        if keys[pygame.K_a]:
+        if keys[pygame.K_a] and not collide_left:
             self.player.move_left()
-        if keys[pygame.K_d]:
+        elif keys[pygame.K_a] and collide_left:
+            l, r = 1, int(self.player.v * time_delta) * 2
+            while r - l > 1:
+                m = (l + r) // 2
+                if self.collision_x(-m):
+                    r = m
+                else:
+                    l = m
+            if l > 1:
+                self.player.move(-l / 4, 0)
+
+        if keys[pygame.K_d] and not collide_right:
             self.player.move_right()
-        if keys[pygame.K_SPACE]:
+        elif keys[pygame.K_d] and collide_right:
+            l, r = 1, int(self.player.v * time_delta) * 2
+            while r - l > 1:
+                m = (l + r) // 2
+                if self.collision_x(m):
+                    r = m
+                else:
+                    l = m
+            if l > 1:
+                self.player.move(l / 4, 0)
+
+        if keys[pygame.K_SPACE] and not collide_vertical:
             self.player.jump()
+        if keys[pygame.K_UP]:
+            self.level.scale += 0.05
+        if keys[pygame.K_DOWN]:
+            self.level.scale -= 0.05
+        if keys[pygame.K_LEFT]:
+            pass
+        if keys[pygame.K_RIGHT]:
+            pass
 
-        self.collision_y()
-
-    def collision_x(self):
-        pass
+    def collision_x(self, dx):
+        self.player.move(dx, 0)
+        collided = False
+        for tile in self.level.visible_tiles:
+            if not tile.has_collision:
+                continue
+            if pygame.sprite.collide_mask(self.player, tile):
+                collided = True
+                break
+        self.player.move(-dx, 0)
+        return collided
 
     def collision_y(self):
-        for obstacle in self.obstacles:
-            if pygame.sprite.collide_mask(self.player, obstacle):
-                if self.player.vy >= 0:
-                    self.player.rect.bottom = obstacle.rect.top
+        collided = False
+        for tile in self.level.visible_tiles:
+            if not tile.has_collision:
+                continue
+            if pygame.sprite.collide_mask(self.player, tile):
+                collided = True
+                if self.player.vy > 0:
+                    self.player.rect.bottom = tile.rect.top
                     self.player.touch_down()
+                elif self.player.vy < 0:
+                    self.player.touch_ceil()
+                    self.player.rect.top = tile.rect.bottom - self.player.sprite_offset_y
+        return collided
 
 
 def main(screen):
     clock = pygame.time.Clock()
 
     menu = Menu()
-    game = Game()
+    game = Game(clock)
 
     run = True
 
     while run:
         clock.tick(MAX_FPS)
-
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
@@ -196,15 +156,17 @@ def main(screen):
             if event == GO_TO_MENU_EVENT:
                 menu.visible = True
                 game.visible = False
+
         if menu.visible:
             menu.draw(screen)
         elif game.visible:
+            image = pygame.Surface((WIDTH // game.level.scale, HEIGHT // game.level.scale))
+            game.draw(image)
+            image = pygame.transform.scale_by(image, game.level.scale)
+            screen.blit(image, (0, 0))
 
-            game.player.loop(clock.get_fps())
-            game.input_handle()
-            game.draw(screen)
-
-        pygame.display.update()
+        pygame.display.set_caption(f"{int(clock.get_fps())} FPS")
+        pygame.display.flip()
 
     pygame.quit()
     quit(0)
