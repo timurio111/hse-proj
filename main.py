@@ -68,7 +68,7 @@ class Game:
         self.offset_x, self.offset_y = 0, 0
         self.visible = True
         self.btn_back = Button((20, 10), (10, 10), "To menu", event=GO_TO_MENU_EVENT, font='data/fonts/menu_font.ttf')
-        self.level = Level('verylongmap')
+        self.level = Level('testmap')
         self.player = Player((100, 0), 1, "Character")
         self.players: dict[int, Player] = {}
         self.network = Network()
@@ -84,9 +84,8 @@ class Game:
         self.input_handle(time_delta)
         self.camera.update(time_delta)
         data = self.player.encode()
-        reply = self.network.send(data)
+        reply = self.network.send(data).decode('utf-8')
         t = json.loads(reply)
-
 
         for k, v in t.items():
             k = int(k)
@@ -107,8 +106,11 @@ class Game:
         self.offset_x = -self.camera.x + WIDTH // self.level.scale // 2
         self.offset_y = -self.camera.y + HEIGHT // self.level.scale // 2
         self.level.draw(screen, self.offset_x, self.offset_y)
-        for player in self.players.values():
-            player.draw(screen, self.offset_x, self.offset_y)
+        for id_, player in self.players.items():
+            if id_ != self.network.id:
+                player.draw(screen, self.offset_x, self.offset_y)
+        self.player.draw(screen, self.offset_x, self.offset_y)
+
 
     def input_handle(self, time_delta):
         keys = pygame.key.get_pressed()

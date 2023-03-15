@@ -1,24 +1,37 @@
+import json
 import socket
+import json
+
 
 class Network:
     def __init__(self):
-        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.server = ""
         self.port = 5555
         self.address = (self.server, self.port)
-        self.id = self.connect()
+        self.id = -1
+        self.id = self.authorize()
+        print(self.id)
 
-    def connect(self):
+    def __del__(self):
+        self.disconnect()
+
+    def authorize(self):
         try:
-            self.client.connect(self.address)
-            return self.client.recv(2048).decode()
+            b = self.send('auth')
+            return int.from_bytes(b, 'little')
         except Exception as e:
             print(e)
 
+    def disconnect(self):
+        self.send('disconnect')
+
     def send(self, data):
         try:
-            self.client.send(str.encode(data))
-            return self.client.recv(2048).decode('utf-8')
+            data = json.dumps({'id': self.id, 'data': data}).encode()
+            self.client.sendto(data, self.address)
+            b, address = self.client.recvfrom(2048)
+            return b
         except socket.error as e:
             print(e)
 
