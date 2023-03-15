@@ -11,6 +11,8 @@ class Network:
         self.address = (self.server, self.port)
         self.id = -1
         self.id = self.authorize()
+        self.client.settimeout(0.005)
+
         print(self.id)
 
     def __del__(self):
@@ -24,9 +26,11 @@ class Network:
             print(e)
 
     def disconnect(self):
+        self.client.settimeout(1)
         self.send('disconnect')
 
     def send(self, data):
+
         try:
             data = json.dumps({'id': self.id, 'data': data}).encode()
             self.client.sendto(data, self.address)
