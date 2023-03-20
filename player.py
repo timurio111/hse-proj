@@ -35,6 +35,8 @@ def load_character_sprites(name: str, scale: int) -> (dict[str, list[pygame.surf
             sprite = pygame.transform.scale(sprite, (ch_data['RECT_WIDTH'] * scale, ch_data['RECT_HEIGHT'] * scale))
             sprites_dict[state + "_right"].append(sprite)
             sprites_dict[state + "_left"].append(pygame.transform.flip(sprite, True, False))
+
+
     return sprites_dict, ch_data
 
 
@@ -71,6 +73,20 @@ class Player(pygame.sprite.Sprite):
 
         self.sprite_animation_counter = 0
 
+        self.inventory = []
+        self.current_weapons = []
+        self.is_holding_weapon = False
+
+
+
+    def draw_weapon_and_hands(self, screen, offset_x, offset_y):
+        if self.is_holding_weapon:
+            #Рисуем оружие в левой и правой руке
+            pass
+        else:
+            #рисуем просто руки
+            screen.blit(self.sprite, (self.rect.x + offset_x, self.rect.y + offset_y))
+
     def get_position(self):
         x = self.x + self.ch_data['RECT_WIDTH'] // 2
         y = self.y + self.ch_data['RECT_HEIGHT'] - self.ch_data['CHARACTER_HEIGHT']
@@ -85,6 +101,7 @@ class Player(pygame.sprite.Sprite):
             self.status = 'fall'
         elif self.vx != 0:
             self.status = 'run'
+
 
         sprite_name = self.status + '_' + self.direction
         sprite_index = (self.sprite_animation_counter // self.sprites_change_rate) % len(self.sprites[sprite_name])
@@ -122,7 +139,6 @@ class Player(pygame.sprite.Sprite):
         self.vy *= -1
 
     def loop(self, time_delta):
-        print(self.status)
         self.update_sprite(time_delta)
         self.vy += min(1, self.off_ground_counter) * time_delta * 2000
         self.off_ground_counter += 1
@@ -130,12 +146,12 @@ class Player(pygame.sprite.Sprite):
 
     def draw(self, screen, offset_x, offset_y):
         screen.blit(self.sprite, (self.rect.x + offset_x, self.rect.y + offset_y))
+      #  self.draw_weapon_and_hands(self.sprite, (self.rect.x + offset_x, self.rect.y + offset_y))
 
     def encode(self):
         return json.dumps([self.rect.x, self.rect.y, self.status, self.direction, self.sprite_animation_counter])
 
     def apply(self, data):
-        print(data)
         self.rect.x = data[0]
         self.rect.y = data[1]
         self.status = data[2]
