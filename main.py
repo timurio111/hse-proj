@@ -84,12 +84,11 @@ class Game:
         self.input_handle(time_delta)
         self.camera.update(time_delta)
         data = self.player.encode()
-        reply = self.network.send(data).decode('utf-8')
-        t = json.loads(reply)
-
+        self.network.send_player_data(data)
+        self.network.receive()
+        t = self.network.last_datagram.data['data']['data']
         for k, v in t.items():
             k = int(k)
-            v = json.loads(v)
             if k == self.network.id:
                 continue
             if k not in self.players.keys():
@@ -100,7 +99,6 @@ class Game:
             if str(k) not in t.keys():
                 self.players.pop(k)
 
-
     def draw(self, screen):
         self.update()
         self.offset_x = -self.camera.x + WIDTH // self.level.scale // 2
@@ -110,7 +108,6 @@ class Game:
             if id_ != self.network.id:
                 player.draw(screen, self.offset_x, self.offset_y)
         self.player.draw(screen, self.offset_x, self.offset_y)
-
 
     def input_handle(self, time_delta):
         keys = pygame.key.get_pressed()
@@ -204,6 +201,7 @@ def main(screen):
                 run = False
                 break
             if event == START_GAME_EVENT:
+                game.network.authorize()
                 menu.visible = False
                 game.visible = True
             if event == GO_TO_MENU_EVENT:
