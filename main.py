@@ -4,7 +4,9 @@ import config
 from button import Button
 from level import Level
 from player import Player
+from network import Network
 from config import WIDTH, HEIGHT, MAX_FPS, FULLSCREEN
+import json
 
 pygame.init()
 
@@ -42,6 +44,24 @@ class Menu:
         self.button_exit.draw(screen, 1)
 
 
+class Camera:
+
+    def __init__(self, focus: Player):
+        self.focus = focus
+        self.x, self.y = focus.get_position()
+
+    def update(self, time_delta):
+        new_x, new_y = self.focus.get_position()
+        dx = new_x - self.x
+        dy = new_y - self.y
+
+        self.x += dx // 1
+        self.y += dy // 1
+
+    def get_coords(self):
+        return self.x, self.y
+
+
 class Game:
     def __init__(self, clock):
         self.clock: pygame.time.Clock = clock
@@ -50,21 +70,46 @@ class Game:
         self.btn_back = Button((20, 10), (10, 10), "To menu", event=GO_TO_MENU_EVENT, font='data/fonts/menu_font.ttf')
         self.level = Level('testmap')
         self.player = Player((100, 0), 1, "Character")
+        self.players: dict[int, Player] = {}
+        self.network = Network()
+        self.camera = Camera(self.player)
 
     def update(self):
         fps = self.clock.get_fps()
-        self.player.loop(fps)
-        self.input_handle(fps)
+        if fps == 0:
+            return
+        time_delta = 1 / max(1, fps)
+
+        self.player.loop(time_delta)
+        self.input_handle(time_delta)
+        self.camera.update(time_delta)
+        data = self.player.encode()
+        self.network.send_player_data(data)
+        self.network.receive()
+        t = self.network.last_datagram.data['data']['data']
+        for k, v in t.items():
+            k = int(k)
+            if k == self.network.id:
+                continue
+            if k not in self.players.keys():
+                self.players[k] = Player((0, 0), 1, "Character")
+            self.players[k].apply(v)
+
+        for k in list(self.players.keys()):
+            if str(k) not in t.keys():
+                self.players.pop(k)
 
     def draw(self, screen):
         self.update()
-        self.offset_x = -self.player.rect.x - self.player.rect.width // 2 + WIDTH // self.level.scale // 2
-        self.offset_y = -self.player.rect.y - self.player.rect.height + HEIGHT // self.level.scale // 2
+        self.offset_x = -self.camera.x + WIDTH // self.level.scale // 2
+        self.offset_y = -self.camera.y + HEIGHT // self.level.scale // 2
         self.level.draw(screen, self.offset_x, self.offset_y)
+        for id_, player in self.players.items():
+            if id_ != self.network.id:
+                player.draw(screen, self.offset_x, self.offset_y)
         self.player.draw(screen, self.offset_x, self.offset_y)
 
-    def input_handle(self, fps):
-        time_delta = 1 / fps
+    def input_handle(self, time_delta):
         keys = pygame.key.get_pressed()
         collide_vertical = self.collision_y()
         collide_left = self.collision_x(min(-1, -int(self.player.v * time_delta)) * 2)
@@ -101,11 +146,15 @@ class Game:
             self.player.jump()
         if keys[pygame.K_UP]:
             self.level.scale += 0.05
+            self.level.scale = min(self.level.scale, 8)
         if keys[pygame.K_DOWN]:
             self.level.scale -= 0.05
+            self.level.scale = max(self.level.scale, 0.5)
         if keys[pygame.K_LEFT]:
+            self.level.fuck += 4
             pass
         if keys[pygame.K_RIGHT]:
+            self.level.fuck -= 4
             pass
 
     def collision_x(self, dx):
@@ -129,6 +178,7 @@ class Game:
                 collided = True
                 if self.player.vy > 0:
                     self.player.rect.bottom = tile.rect.top
+                    self.player.y = self.player.rect.top
                     self.player.touch_down()
                 elif self.player.vy < 0:
                     self.player.touch_ceil()
@@ -151,6 +201,7 @@ def main(screen):
                 run = False
                 break
             if event == START_GAME_EVENT:
+                game.network.authorize()
                 menu.visible = False
                 game.visible = True
             if event == GO_TO_MENU_EVENT:

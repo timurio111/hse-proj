@@ -56,6 +56,7 @@ class Level:
         self.tiles, self.scale = load_map(name)
         self.obstacles = [tile for tile in self.tiles if tile.has_collision]
         self.visible_tiles = []
+        self.radius = 1000
 
     def update(self, offset_x, offset_y):
         self.visible_tiles.clear()
@@ -63,10 +64,15 @@ class Level:
             if tile.visible(offset_x, offset_y, self.scale):
                 self.visible_tiles.append(tile)
 
+
+
     def draw(self, screen: pygame.Surface, offset_x, offset_y):
         self.update(offset_x, offset_y)
-        for tile in self.visible_tiles:
-            tile.draw(screen, offset_x, offset_y, self.scale)
+        for tile in self.tiles:
+            if tile.distance(offset_x, offset_y, self.scale) < self.radius:
+                tile.draw(screen, offset_x, offset_y, self.scale)
+        return
+
 
 
 class Tile(pygame.sprite.Sprite):
@@ -79,15 +85,14 @@ class Tile(pygame.sprite.Sprite):
         self.mask = pygame.mask.from_surface(self.image)
 
     def visible(self, offset_x, offset_y, scale):
+        print(HEIGHT, WIDTH)
         return not (self.rect.bottom + offset_y <= 0 or self.rect.top + offset_y >= HEIGHT // scale or
                     self.rect.right + offset_x <= 0 or self.rect.left + offset_x >= WIDTH // scale)
 
     def distance(self, offset_x, offset_y, scale):
-
         x = -offset_x + WIDTH // scale // 2
         y = -offset_y + HEIGHT // scale // 2
         return ((x - self.rect.x) ** 2 + (y - self.rect.y) ** 2) ** 0.5
-
 
     def draw(self, screen: pygame.Surface, offset_x, offset_y, scale):
         screen.blit(self.image, (self.rect.x + offset_x, self.rect.y + offset_y))
