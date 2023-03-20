@@ -39,7 +39,7 @@ class Datagram:
 
 class Network:
     def __init__(self):
-        self.server = "192.168.1.223"
+        self.server = "192.168.50.255"
         self.port = 5555
         self.address = (self.server, self.port)
 

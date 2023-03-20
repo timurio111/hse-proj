@@ -6,7 +6,7 @@ from network import Datagram
 
 sel = selectors.DefaultSelector()
 
-server = "192.168.1.223"
+server = "192.168.50.255"
 port = 5555
 players_data: dict[int, str] = {}
 clients = []
