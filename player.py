@@ -56,7 +56,7 @@ class Player(pygame.sprite.Sprite):
 
         self.sprite: pygame.Surface = None
 
-        self.v = 256  # В пикселях в секунду
+        self.v = 196  # В пикселях в секунду
         self.vx = 0
         self.vy = 0
         self.x, self.y = pos
@@ -102,8 +102,6 @@ class Player(pygame.sprite.Sprite):
     def move(self, dx, dy):
         self.x += dx
         self.rect.x = self.x
-
-        # Надо пофиксить
         self.y += dy
         self.rect.y = self.y
 
@@ -122,7 +120,8 @@ class Player(pygame.sprite.Sprite):
         self.vy *= -1
 
     def loop(self, time_delta):
-        print(self.status)
+        time_delta = min(1 / 20, time_delta)
+
         self.update_sprite(time_delta)
         self.vy += min(1, self.off_ground_counter) * time_delta * 2000
         self.off_ground_counter += 1
@@ -132,10 +131,9 @@ class Player(pygame.sprite.Sprite):
         screen.blit(self.sprite, (self.rect.x + offset_x, self.rect.y + offset_y))
 
     def encode(self):
-        return json.dumps([self.rect.x, self.rect.y, self.status, self.direction, self.sprite_animation_counter])
+        return [self.rect.x, self.rect.y, self.status, self.direction, self.sprite_animation_counter]
 
     def apply(self, data):
-        print(data)
         self.rect.x = data[0]
         self.rect.y = data[1]
         self.status = data[2]
@@ -144,4 +142,3 @@ class Player(pygame.sprite.Sprite):
         sprite_name = self.status + '_' + self.direction
         sprite_index = (self.sprite_animation_counter // self.sprites_change_rate) % len(self.sprites[sprite_name])
         self.sprite = self.sprites[sprite_name][sprite_index]
-

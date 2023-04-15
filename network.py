@@ -1,26 +1,28 @@
-import asyncio
-import json
 import socket
 import json
 import selectors
 
-from time import time, sleep
 
-
-class Datagram:
+class DataPacket:
     AUTH = 1
-    GAME = 2
+    GAME_STATE = 2
     DISCONNECT = 3
+    GAME_INFO = 4
+    PLAYERS_INFO = 5
+    CLIENT_PLAYER_INFO = 6
+    ADD_PLAYER_FLAG = 7
+    REMOVE_PLAYER_FLAG = 8
 
-    def __init__(self, purpose, time=time(), data=None):
-        self.purpose = purpose
-        self.time = time
+    FLAG_READY = 100
+
+    def __init__(self, data_type, data=None):
+        self.data_type = data_type
         self.data = dict() if (data is None) else data
 
     @classmethod
-    def from_bytes(cls, datagram: bytes):
-        datagram = json.loads(datagram)
-        return Datagram(datagram['purpose'], datagram['time'], datagram['data'])
+    def from_bytes(cls, packet: bytes):
+        packet = json.loads(packet)
+        return DataPacket(packet['data_type'], packet['data'])
 
     def __setitem__(self, key, value):
         self.data[key] = value
@@ -30,64 +32,44 @@ class Datagram:
 
     def encode(self) -> bytes:
         datagram = {
-            'time': self.time,
-            'purpose': self.purpose,
+            'data_type': self.data_type,
             'data': self.data
         }
         return json.dumps(datagram).encode()
 
 
 class Network:
-    def __init__(self):
-        self.server = "192.168.1.223"
-        self.port = 5555
-        self.address = (self.server, self.port)
+    def __init__(self, server, port, callback):
+        self.callback = callback
+        self.server = server
 
-        self.udp_client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.udp_client_socket.setblocking(False)
+        self.tcp_port = port
+        self.tcp_address = (self.server, self.tcp_port)
 
+        self.tcp_client_socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.tcp_client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.tcp_client_socket.settimeout(3)
         self.sel = selectors.DefaultSelector()
-        self.sel.register(self.udp_client_socket, selectors.EVENT_READ, self.handle_datagram)
+        self.sel.register(self.tcp_client_socket, selectors.EVENT_READ, self.callback)
 
         self.id = -1
-        self.last_datagram = Datagram(Datagram.GAME, 0, {'data': {'data': {}}})
 
     def __del__(self):
-        self.disconnect()
+        self.tcp_client_socket.close()
 
-    def authorize(self):  # Надо обработать потерю пакета
-        request = Datagram(purpose=Datagram.AUTH)
-        request['id'] = self.id
-        self.udp_client_socket.sendto(request.encode(), self.address)
+    def authorize(self):
+        self.tcp_client_socket.connect(self.tcp_address)
+        self.tcp_client_socket.setblocking(False)
 
-    def disconnect(self):
-        request = Datagram(purpose=Datagram.DISCONNECT)
-        request['id'] = self.id
-        self.udp_client_socket.sendto(request.encode(), self.address)
-
-    def send_player_data(self, data):
-        try:
-            datagram = Datagram(Datagram.GAME, time())
-            datagram['client_id'] = self.id
-            datagram['data'] = data
-            self.udp_client_socket.sendto(datagram.encode(), self.address)
-        except socket.error as e:
-            print(e)
-
-    def handle_datagram(self, client_socket: socket.socket, mask):
-        reply, address = client_socket.recvfrom(4096)
-        datagram = Datagram.from_bytes(reply)
-        if datagram.purpose == Datagram.AUTH:
-            self.id = datagram['id']
-        if datagram.purpose == Datagram.GAME:
-            if self.last_datagram.time < datagram.time:
-                self.last_datagram = datagram
+    def send(self, data_packet: DataPacket):
+        self.tcp_client_socket.send(data_packet.encode() + b'\n')
 
     def receive(self):
         while True:
             events = self.sel.select(timeout=0)
             if not events:
                 break
+            c += 1
             for key, mask in events:
                 callback = key.data
                 callback(key.fileobj, mask)

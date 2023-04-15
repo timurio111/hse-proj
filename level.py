@@ -48,12 +48,19 @@ def load_map(name: str):
                         tilewidth, tileheight, tiles_images[tile_id - 1], has_collision)
             tiles.append(tile)
 
-    return tiles, scale
+    objects: list[GameObject] = []
+    for objectgroup in map_xml_root.findall('objectgroup'):
+        for object in objectgroup.findall('object'):
+            x, y = object.get('x'), object.get('y')
+            width, height = object.get('width'), object.get('height')
+            objects.append(GameObject(int(x), int(y), int(width), int(height)))
+
+    return tiles, scale, objects
 
 
 class Level:
     def __init__(self, name: str):
-        self.tiles, self.scale = load_map(name)
+        self.tiles, self.scale, self.objects = load_map(name)
         self.obstacles = [tile for tile in self.tiles if tile.has_collision]
         self.visible_tiles = []
         self.fuck = 200
@@ -79,6 +86,12 @@ class Level:
         return
         for tile in self.visible_tiles:
             tile.draw(screen, offset_x, offset_y, self.scale)
+
+
+class GameObject(pygame.sprite.Sprite):
+    def __init__(self, x, y, width, height):
+        super().__init__()
+        self.rect = pygame.Rect((x, y), (width, height))
 
 
 class Tile(pygame.sprite.Sprite):
