@@ -69,7 +69,6 @@ class Network:
             events = self.sel.select(timeout=0)
             if not events:
                 break
-            c += 1
             for key, mask in events:
                 callback = key.data
                 callback(key.fileobj, mask)
