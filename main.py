@@ -2,6 +2,7 @@ import socket
 import pygame
 import os
 import config
+
 from time import time
 from button import Button, TextInput
 from level import Level
@@ -9,16 +10,19 @@ from player import Player
 from collections import deque
 from network import Network
 from config import WIDTH, HEIGHT, MAX_FPS, FULLSCREEN
-import json
 
 pygame.init()
 pygame.scrap.init()
 pygame.scrap.set_mode(pygame.SCRAP_CLIPBOARD)
 
 if FULLSCREEN:
+    config.HEIGHT = pygame.display.Info().current_h
+    config.WIDTH = pygame.display.Info().current_w
+    WIDTH = config.WIDTH
+    HEIGHT = config.HEIGHT
+    print(WIDTH, HEIGHT)
     screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
-    config.HEIGHT = screen.get_height()
-    config.WIDTH = screen.get_width()
+
 else:
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
@@ -31,6 +35,9 @@ CONNECT_TO_SERVER_EVENT = pygame.USEREVENT + 5
 
 clock = pygame.time.Clock()
 
+from button import Button
+from level import Level
+from player import Player
 
 def load_background(image_name: str) -> pygame.Surface:
     path = os.path.join("data", "Background", image_name)
@@ -98,27 +105,56 @@ class Camera:
     def __init__(self, focus: Player):
         self.focus = focus
         self.x, self.y = focus.get_position()
-
+        self.rect = [int(self.x), int(self.y), 45, 45]
     def update(self, time_delta):
         new_x, new_y = self.focus.get_position()
-        dx = new_x - self.x
-        dy = new_y - self.y
 
-        self.x += dx // 1
-        self.y += dy // 1
+        if self.is_in_rect() == 'x_left':
+            self.x += (new_x - self.rect[0])
+            self.rect[0] = new_x
+
+        if self.is_in_rect() == 'x_right':
+            self.x += new_x - (self.rect[0] + self.rect[2])
+            self.rect[0] = new_x - self.rect[2]
+
+        if self.is_in_rect() == 'y_up':
+            self.y += new_y - self.rect[1]
+            self.rect[1] = new_y
+
+        if self.is_in_rect() == 'y_down':
+            self.y += new_y - (self.rect[1] + self.rect[3])
+            self.rect[1] = new_y - self.rect[3]
+
+
+
+
 
     def get_coords(self):
         return self.x, self.y
 
+    def is_in_rect(self):
+        player_x, player_y = self.focus.get_position()
+        if not (self.rect[0] <= player_x):
+            return 'x_left'
+        if not(player_x <= self.rect[0] + self.rect[2]):
+            return 'x_right'
+        if not (self.rect[1] <= player_y):
+            return 'y_up'
+        if not (player_y <= self.rect[1] + self.rect[3]):
+            return 'y_down'
+        else:
+            return 'ok'
 
 class Game:
     def __init__(self, clock, level_name="", player_position=(0, 0)):
         self.clock: pygame.time.Clock = clock
         self.offset_x, self.offset_y = 0, 0
         self.visible = True
+
         self.level = Level(level_name)
         self.player = Player(player_position, 1, "Character")
         self.players: dict[int, Player] = {}
+
         self.camera = Camera(self.player)
 
     def update(self):
@@ -129,12 +165,14 @@ class Game:
         self.input_handle(time_delta)
         self.camera.update(time_delta)
 
+
     def draw(self, screen):
         image = pygame.Surface((WIDTH // self.level.scale, HEIGHT // self.level.scale))
 
         self.update()
         self.offset_x = -self.camera.x + WIDTH // self.level.scale // 2
         self.offset_y = -self.camera.y + HEIGHT // self.level.scale // 2
+
         self.level.draw(image, self.offset_x, self.offset_y)
         for id_, player in self.players.items():
             player.draw(image, self.offset_x, self.offset_y)
@@ -142,6 +180,8 @@ class Game:
 
         image = pygame.transform.scale_by(image, self.level.scale)
         screen.blit(image, (0, 0))
+
+
 
     def input_handle(self, time_delta):
         keys = pygame.key.get_pressed()
@@ -185,11 +225,12 @@ class Game:
             self.level.scale -= 0.05
             self.level.scale = max(self.level.scale, 0.5)
         if keys[pygame.K_LEFT]:
-            self.level.fuck += 4
+            self.level.radius += 4
             pass
         if keys[pygame.K_RIGHT]:
-            self.level.fuck -= 4
+            self.level.radius -= 4
             pass
+
 
     def collision_x(self, dx):
         self.player.move(dx, 0)
@@ -210,6 +251,7 @@ class Game:
                 continue
             if pygame.sprite.collide_mask(self.player, tile):
                 collided = True
+                print("Обнаружена коллизия")
                 if self.player.vy > 0:
                     self.player.rect.bottom = tile.rect.top
                     self.player.y = self.player.rect.top
@@ -329,6 +371,7 @@ def main(screen):
             if event.type == pygame.QUIT:
                 run = False
                 break
+
 
             if type(current_screen) == ConnectToServerMenu:
                 current_screen.event_handle(event)

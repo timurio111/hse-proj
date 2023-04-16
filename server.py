@@ -6,8 +6,10 @@ from network import DataPacket
 
 sel = selectors.DefaultSelector()
 
+
 server = "127.0.0.1"
 tcp_port = 5555
+
 clients = []
 current_id = 0
 client_socket_to_id = {}
