@@ -1,6 +1,55 @@
 import pygame
 
 
+class TextInput:
+    def __init__(self, size, pos, text="", hint="", font=None):
+        self.width = size[0]
+        self.height = size[1]
+        self.font = pygame.font.Font(font, self.height)
+        self.active = False
+
+        self.x = pos[0]
+        self.y = pos[1]
+
+        self.text = text
+        self.text_surf = self.font.render(self.text, True, (255, 255, 255))
+        self.hint = hint
+        self.hint_surf = self.font.render(self.hint, True, (100, 100, 100))
+        self.image_active = pygame.Surface(size)
+        self.image_active.fill((0, 0, 0))
+        self.image_inactive = pygame.Surface(size)
+        self.image_inactive.fill((50, 50, 50))
+
+        self.rect = pygame.Rect(pos, size)
+
+    def event_handle(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self.rect.collidepoint(event.pos):
+                self.active = True
+            else:
+                self.active = False
+        if not self.active:
+            return
+        if event.type == pygame.KEYDOWN:
+            if (event.key == pygame.K_v) and (event.mod & pygame.KMOD_CTRL):
+                print('Clipboard:', pygame.scrap.get(pygame.SCRAP_TEXT))
+            if event.key == pygame.K_BACKSPACE:
+                self.text = self.text[:-1]
+            else:
+                self.text += event.unicode
+        self.text_surf = self.font.render(self.text, True, (255, 255, 255))
+
+    def draw(self, screen: pygame.Surface, scale):
+        if self.active:
+            screen.blit(self.image_active, (self.x, self.y))
+        else:
+            screen.blit(self.image_inactive, (self.x, self.y))
+        if not self.text:
+            screen.blit(self.hint_surf, (self.x, self.y))
+        else:
+            screen.blit(self.text_surf, (self.x, self.y))
+
+
 class Button:
     def __init__(self, size, pos, text="", border_width=2, font=None, event=None):
         self.event = event
