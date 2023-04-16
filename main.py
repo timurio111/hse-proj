@@ -87,6 +87,7 @@ class Game:
         fps = self.clock.get_fps()
         time_delta = 1 / max(1, fps)
 
+        self.level.update(self.player.x, self.player.y)
         self.player.loop(time_delta)
         self.input_handle(time_delta)
         self.camera.update(time_delta)
@@ -98,8 +99,8 @@ class Game:
         self.offset_x = -self.camera.x + WIDTH // self.level.scale // 2
         self.offset_y = -self.camera.y + HEIGHT // self.level.scale // 2
 
-        self.level.draw(image, self.offset_x, self.offset_y)
-        for id_, player in self.players.items():
+        self.level.draw(image, self.offset_x, self.offset_y, *self.player.get_position())
+        for player_id, player in self.players.items():
             player.draw(image, self.offset_x, self.offset_y)
         self.player.draw(image, self.offset_x, self.offset_y)
 
@@ -157,7 +158,7 @@ class Game:
     def collision_x(self, dx):
         self.player.move(dx, 0)
         collided = False
-        for tile in self.level.visible_tiles:
+        for tile in self.level.closest_tiles:
             if not tile.has_collision:
                 continue
             if pygame.sprite.collide_mask(self.player, tile):
@@ -168,7 +169,7 @@ class Game:
 
     def collision_y(self):
         collided = False
-        for tile in self.level.visible_tiles:
+        for tile in self.level.closest_tiles:
             if not tile.has_collision:
                 continue
             if pygame.sprite.collide_mask(self.player, tile):
@@ -217,8 +218,8 @@ class GameManager:
         if data_packet.data_type == self.DataPacket.PLAYERS_INFO:
             for player_id, data in data_packet.data.items():
                 player_id = int(player_id)
-                # if player_id == self.network.id:
-                #    continue
+                if player_id == self.network.id:
+                    continue
 
                 if player_id not in self.game.players.keys():
                     self.game.players[player_id] = Player((0, 0), 1, "Character")
