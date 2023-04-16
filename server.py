@@ -1,11 +1,9 @@
-import os
-import socket
-import json
 import selectors
+import socket
+
 from network import DataPacket
 
 sel = selectors.DefaultSelector()
-
 
 server = "127.0.0.1"
 tcp_port = 5555
@@ -86,18 +84,15 @@ def send_players_data(client_socket: socket.socket):
         players_data[player_id] = game_state.players_data[player_id]
     response = DataPacket(DataPacket.PLAYERS_INFO, players_data).encode()
 
-
     client_socket.send(response + b'\n')
 
 
 def change_level():
-
     game_data = {'level_name': game_state.level_name, 'position': [20, 20]}
     response = DataPacket(DataPacket.GAME_INFO, game_data).encode()
     for client_socket, player_id in client_socket_to_id.items():
         game_state.players_flags[player_id].remove(GameState.STATUS_PLAYING)
         client_socket.send(response + b'\n')
-
 
 
 def handle_tcp(client_socket: socket.socket, mask):
@@ -145,6 +140,7 @@ def get_tcp_socket():
     tcp_socket.listen(MAX_CONNECTIONS)
     return tcp_socket
 
+
 def update():
     if all([DataPacket.FLAG_READY in player_flags for player_flags in game_state.players_flags.values()]):
         for player_id, player_flags in game_state.players_flags.items():
@@ -166,6 +162,7 @@ def main():
         for key, mask in events:
             callback = key.data
             callback(key.fileobj, mask)
+
 
 if __name__ == '__main__':
     main()

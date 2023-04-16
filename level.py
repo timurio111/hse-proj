@@ -1,9 +1,10 @@
-import xml.etree.ElementTree as ET
-import pygame
-from fnmatch import fnmatch
-from config import WIDTH, HEIGHT
-
 import os
+import xml.etree.ElementTree as ET
+from fnmatch import fnmatch
+
+import pygame
+
+from config import WIDTH, HEIGHT
 
 
 def load_map(name: str):
@@ -71,15 +72,12 @@ class Level:
             if tile.visible(offset_x, offset_y, self.scale):
                 self.visible_tiles.append(tile)
 
-
-
     def draw(self, screen: pygame.Surface, offset_x, offset_y):
         self.update(offset_x, offset_y)
         for tile in self.tiles:
             if tile.distance(offset_x, offset_y, self.scale) < self.radius:
                 tile.draw(screen, offset_x, offset_y, self.scale)
         return
-
 
 
 class GameObject(pygame.sprite.Sprite):
@@ -98,7 +96,6 @@ class Tile(pygame.sprite.Sprite):
         self.mask = pygame.mask.from_surface(self.image)
 
     def visible(self, offset_x, offset_y, scale):
-        print(HEIGHT, WIDTH)
         return not (self.rect.bottom + offset_y <= 0 or self.rect.top + offset_y >= HEIGHT // scale or
                     self.rect.right + offset_x <= 0 or self.rect.left + offset_x >= WIDTH // scale)
 

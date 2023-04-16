@@ -1,6 +1,6 @@
-import socket
 import json
 import selectors
+import socket
 
 
 class DataPacket:
@@ -42,7 +42,6 @@ class Network:
     def __init__(self, server, port, callback):
         self.callback = callback
         self.server = server
-
 
         self.tcp_port = port
         self.tcp_address = (self.server, self.tcp_port)

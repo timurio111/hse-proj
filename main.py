@@ -1,15 +1,10 @@
 import socket
-import pygame
-import os
-import config
 
-from time import time
-from button import Button, TextInput
-from level import Level
-from player import Player
-from collections import deque
-from network import Network
+import pygame
+
+import config
 from config import WIDTH, HEIGHT, MAX_FPS, FULLSCREEN
+from network import Network
 
 pygame.init()
 pygame.scrap.init()
@@ -20,84 +15,17 @@ if FULLSCREEN:
     config.WIDTH = pygame.display.Info().current_w
     WIDTH = config.WIDTH
     HEIGHT = config.HEIGHT
-    print(WIDTH, HEIGHT)
     screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
 
 else:
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
-EXIT_GAME_EVENT = pygame.QUIT
-START_GAME_EVENT = pygame.USEREVENT + 1
-OPEN_MAIN_MENU_EVENT = pygame.USEREVENT + 2
-LOADING_SCREEN_EVENT = pygame.USEREVENT + 3
-OPEN_CONNECTION_MENU_EVENT = pygame.USEREVENT + 4
-CONNECT_TO_SERVER_EVENT = pygame.USEREVENT + 5
-
 clock = pygame.time.Clock()
 
-from button import Button
+from event_codes import *
 from level import Level
 from player import Player
-
-def load_background(image_name: str) -> pygame.Surface:
-    path = os.path.join("data", "Background", image_name)
-    image = pygame.transform.scale(pygame.image.load(path), (WIDTH, HEIGHT))
-    return image.convert()
-
-
-class Menu:
-    def __init__(self):
-        self.visible = True
-        self.background = load_background("gradient2.png")
-        self.button_start_server = Button(size=(WIDTH // 2, HEIGHT // 12),
-                                          pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2),
-                                          event=pygame.event.Event(START_GAME_EVENT),
-                                          text="Start server",
-                                          font='data/fonts/menu_font.ttf')
-        self.button_connect = Button(size=(WIDTH // 2, HEIGHT // 12),
-                                     pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 + HEIGHT // 8),
-                                     event=pygame.event.Event(OPEN_CONNECTION_MENU_EVENT),
-                                     text="Connect to server",
-                                     font='data/fonts/menu_font.ttf')
-        self.button_exit = Button(size=(WIDTH // 2, HEIGHT // 12),
-                                  pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 + 2 * HEIGHT // 8),
-                                  event=pygame.event.Event(EXIT_GAME_EVENT),
-                                  text="Quit", font='data/fonts/menu_font.ttf')
-
-    def draw(self, screen: pygame.Surface):
-        screen.blit(self.background, (0, 0))
-        self.button_connect.draw(screen, 1)
-        self.button_start_server.draw(screen, 1)
-        self.button_exit.draw(screen, 1)
-
-
-class ConnectToServerMenu:
-    def __init__(self):
-        self.background = load_background('gradient1.png')
-        self.button_back = Button(size=(WIDTH // 5, 40),
-                                  pos=(10, 10),
-                                  text="Back",
-                                  event=pygame.event.Event(OPEN_MAIN_MENU_EVENT))
-        self.text_input_address = TextInput(size=(WIDTH // 1.1, 40),
-                                            pos=((WIDTH - WIDTH // 1.1) // 2, HEIGHT // 2),
-                                            hint="server address",
-                                            text="",
-                                            font='data/fonts/menu_font.ttf')
-
-        self.button_start_game = Button(size=(WIDTH // 5, 40),
-                                        pos=(WIDTH - WIDTH // 5 - 10, HEIGHT - 40 - 10),
-                                        text="Connect",
-                                        event=pygame.event.Event(CONNECT_TO_SERVER_EVENT, ))
-
-    def event_handle(self, event):
-        self.text_input_address.event_handle(event)
-        self.button_start_game.event.dict['input'] = self.text_input_address.text
-
-    def draw(self, screen: pygame.Surface):
-        screen.blit(self.background, (0, 0))
-        self.text_input_address.draw(screen, 1)
-        self.button_back.draw(screen, 1)
-        self.button_start_game.draw(screen, 1)
+from screens import Menu, ConnectToServerMenu, LoadingScreen
 
 
 class Camera:
@@ -106,6 +34,7 @@ class Camera:
         self.focus = focus
         self.x, self.y = focus.get_position()
         self.rect = [int(self.x), int(self.y), 45, 45]
+
     def update(self, time_delta):
         new_x, new_y = self.focus.get_position()
 
@@ -125,10 +54,6 @@ class Camera:
             self.y += new_y - (self.rect[1] + self.rect[3])
             self.rect[1] = new_y - self.rect[3]
 
-
-
-
-
     def get_coords(self):
         return self.x, self.y
 
@@ -136,7 +61,7 @@ class Camera:
         player_x, player_y = self.focus.get_position()
         if not (self.rect[0] <= player_x):
             return 'x_left'
-        if not(player_x <= self.rect[0] + self.rect[2]):
+        if not (player_x <= self.rect[0] + self.rect[2]):
             return 'x_right'
         if not (self.rect[1] <= player_y):
             return 'y_up'
@@ -144,6 +69,7 @@ class Camera:
             return 'y_down'
         else:
             return 'ok'
+
 
 class Game:
     def __init__(self, clock, level_name="", player_position=(0, 0)):
@@ -165,7 +91,6 @@ class Game:
         self.input_handle(time_delta)
         self.camera.update(time_delta)
 
-
     def draw(self, screen):
         image = pygame.Surface((WIDTH // self.level.scale, HEIGHT // self.level.scale))
 
@@ -180,8 +105,6 @@ class Game:
 
         image = pygame.transform.scale_by(image, self.level.scale)
         screen.blit(image, (0, 0))
-
-
 
     def input_handle(self, time_delta):
         keys = pygame.key.get_pressed()
@@ -231,7 +154,6 @@ class Game:
             self.level.radius -= 4
             pass
 
-
     def collision_x(self, dx):
         self.player.move(dx, 0)
         collided = False
@@ -251,7 +173,6 @@ class Game:
                 continue
             if pygame.sprite.collide_mask(self.player, tile):
                 collided = True
-                print("Обнаружена коллизия")
                 if self.player.vy > 0:
                     self.player.rect.bottom = tile.rect.top
                     self.player.y = self.player.rect.top
@@ -263,24 +184,6 @@ class Game:
 
     def apply(self, data):
         pass
-
-
-class LoadingScreen:
-    def __init__(self, text='Waiting...'):
-        self.set_text(text)
-        self.visible = False
-
-    def set_text(self, text):
-        self.text = text
-        font = pygame.font.Font(None, 100)
-        self.image = pygame.Surface((WIDTH, HEIGHT))
-        self.image.fill((0, 0, 0))
-        text_image = font.render(self.text, True, (255, 255, 255))
-        self.image.blit(text_image, (WIDTH // 2 - text_image.get_width() // 2,
-                                     HEIGHT // 2 - text_image.get_height() // 2))
-
-    def draw(self, screen):
-        screen.blit(self.image, (0, 0))
 
 
 class GameManager:
@@ -361,6 +264,17 @@ class GameManager:
             self.game.draw(screen)
 
 
+def validate_address(user_input):
+    if ':' not in user_input:
+        raise ValueError('Not a valid server address')
+    server, port = user_input.split(':')
+    socket.inet_aton(server)
+    port = int(port)
+    if port < 1 or port > 65535:
+        raise ValueError('Not a valid port number')
+    return server, port
+
+
 def main(screen):
     current_screen = Menu()
     game_manager = GameManager()
@@ -371,7 +285,6 @@ def main(screen):
             if event.type == pygame.QUIT:
                 run = False
                 break
-
 
             if type(current_screen) == ConnectToServerMenu:
                 current_screen.event_handle(event)
@@ -387,16 +300,7 @@ def main(screen):
             if event.type == CONNECT_TO_SERVER_EVENT:
 
                 try:
-                    user_input = event.dict['input']
-
-                    if ':' not in user_input:
-                        raise ValueError('Not a valid server address')
-                    server, port = user_input.split(':')
-                    socket.inet_aton(server)
-                    port = int(port)
-                    if port < 1 or port > 65535:
-                        raise ValueError('Not a valid port number')
-
+                    server, port = validate_address(event.dict['input'])
                     current_screen = game_manager
                     game_manager.connect(server, port)
                 except Exception as e:
