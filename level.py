@@ -37,59 +37,120 @@ def load_map(name: str):
     map_width = int(map_xml_root.get('width'))
     map_height = int(map_xml_root.get('height'))
     scale = int(map_xml_root.find('properties').find('property').get('value'))
-    tiles: list[Tile] = []
+    layers: list[Layer] = []
+
     for layer in map_xml_root.findall('layer'):
+        tiles: list[Tile] = []
         data = layer.find('data').text
         tile_ids = list(map(int, data.split(',')))
         has_collision = True if (layer.find('properties').find('property').get('value') == 'true') else False
         for i, tile_id in enumerate(tile_ids):
-            tile_x = (i) % (map_width)
-            tile_y = (i) // (map_width)
-            tile = Tile(tilewidth * tile_x, tileheight * tile_y,
-                        tilewidth, tileheight, tiles_images[tile_id - 1], has_collision)
+            tile_x = i % map_width
+            tile_y = i // map_width
+            tile = Tile(tilewidth * tile_x, tileheight * tile_y, tilewidth, tileheight,
+                        tile_id, tiles_images[tile_id - 1], has_collision)
             tiles.append(tile)
+        layers.append(Layer(has_collision, tiles))
 
-    objects: list[GameObject] = []
+    objects = dict()
+    objects['rectangles'], objects['points'] = [], []
     for objectgroup in map_xml_root.findall('objectgroup'):
-        for object in objectgroup.findall('object'):
-            x, y = object.get('x'), object.get('y')
-            width, height = object.get('width'), object.get('height')
-            objects.append(GameObject(int(x), int(y), int(width), int(height)))
+        for game_object in objectgroup.findall('object'):
+            if game_object.find('point') is not None:
+                x, y = game_object.get('x'), game_object.get('y')
+                objects['points'].append(GameObjectPoint(int(float(x)), int(float(y))))
+            elif game_object.find('ellipse') is not None:
+                pass
+            elif game_object.find('polygon') is not None:
+                pass
+            else:
+                x, y = game_object.get('x'), game_object.get('y')
+                width, height = game_object.get('width'), game_object.get('height')
+                objects['rectangles'].append(
+                    GameObjectRect(int(float(x)), int(float(y)), int(float(width)), int(float(height))))
 
-    return tiles, scale, objects
+    info = dict()
+    info['scale'] = scale
+    info['width'] = map_width
+    info['height'] = map_height
+    info['tile_width'] = tilewidth
+    info['tile_height'] = tileheight
+    return layers, objects, info
 
 
 class Level:
     def __init__(self, name: str):
-        self.tiles, self.scale, self.objects = load_map(name)
-        self.obstacles = [tile for tile in self.tiles if tile.has_collision]
-        self.closest_tiles = []
-        self.collision_check_radius = 200
+        self.layers, self.objects, self.info = load_map(name)
+        self.scale = self.info['scale']
         self.radius = 200
 
-    def update(self, pos_x, pos_y):
-        self.closest_tiles.clear()
-        for tile in self.tiles:
-            if tile.distance(pos_x, pos_y) < self.collision_check_radius:
-                self.closest_tiles.append(tile)
-
     def draw(self, screen: pygame.Surface, offset_x, offset_y, pos_x, pos_y):
-        for tile in self.tiles:
-            if tile.distance(pos_x, pos_y) < self.radius:
-                tile.draw(screen, offset_x, offset_y, self.scale)
+        for layer in self.layers:
+            for tile in layer.tiles:
+                if tile.distance(pos_x, pos_y) < self.radius and tile.visible(offset_x, offset_y, self.scale):
+                    tile.draw(screen, offset_x, offset_y, self.scale)
+
+    def collide_sprite(self, sprite: pygame.sprite.Sprite):
+        collided = []
+        rect = sprite.rect
+        for layer in self.layers:
+            if not layer.has_collision:
+                continue
+            for i in range(self.info['height']):
+                for j in range(self.info['width']):
+                    tile = layer.tiles[i * self.info['width'] + j]
+                    if tile.rect.bottom <= rect.top:
+                        break
+                    if tile.rect.top >= rect.bottom:
+                        return collided
+
+                    if tile.rect.right <= rect.left:
+                        continue
+                    if tile.rect.left >= rect.right:
+                        break
+
+                    if tile.tile_id == 0:
+                        continue
+                    if pygame.sprite.collide_mask(tile, sprite):
+                        collided.append(tile)
+        return collided
+
+    def collide_point(self, x, y):
+        collided = []
+        for layer in self.layers:
+            if not layer.has_collision:
+                continue
+
+            tile = layer.tiles[int(y // self.info['tile_height'] * self.info['width'] + x // self.info['tile_width'])]
+            if tile.mask.get_at((x % self.info['tile_width'], y % self.info['tile_height'])):
+                collided.append(tile)
+
+        return collided
 
 
-class GameObject(pygame.sprite.Sprite):
+class GameObjectRect:
     def __init__(self, x, y, width, height):
-        super().__init__()
         self.rect = pygame.Rect((x, y), (width, height))
+
+
+class GameObjectPoint:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+
+
+class Layer:
+    def __init__(self, has_collision, tiles):
+        self.has_collision = has_collision
+        self.tiles: list[Tile] = tiles
 
 
 class Tile(pygame.sprite.Sprite):
-    def __init__(self, x, y, width, height, image: pygame.Surface, has_collision, name=None):
+    def __init__(self, x, y, width, height, tile_id, image: pygame.Surface, has_collision, name=None):
         super().__init__()
+
         self.has_collision = has_collision
         self.rect = pygame.Rect((x, y), (width, height))
+        self.tile_id = tile_id
         self.image = image
         self.name = name
         self.mask = pygame.mask.from_surface(self.image)

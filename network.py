@@ -5,13 +5,18 @@ import socket
 
 class DataPacket:
     AUTH = 1
-    GAME_STATE = 2
-    DISCONNECT = 3
-    GAME_INFO = 4
-    PLAYERS_INFO = 5
-    CLIENT_PLAYER_INFO = 6
-    ADD_PLAYER_FLAG = 7
-    REMOVE_PLAYER_FLAG = 8
+    INITIAL_INFO = 2
+    GAME_STATE = 3
+    DISCONNECT = 4
+    GAME_INFO = 5
+    PLAYERS_INFO = 6
+    CLIENT_PLAYER_INFO = 7
+    ADD_PLAYER_FLAG = 8
+    REMOVE_PLAYER_FLAG = 9
+    NEW_BULLET_FROM_CLIENT = 10
+    NEW_BULLET_FROM_SERVER = 11
+    DELETE_BULLET_FROM_SERVER = 12
+    HEALTH_POINTS = 13
 
     FLAG_READY = 100
 
@@ -48,7 +53,6 @@ class Network:
 
         self.tcp_client_socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.tcp_client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        self.tcp_client_socket.settimeout(3)
         self.sel = selectors.DefaultSelector()
         self.sel.register(self.tcp_client_socket, selectors.EVENT_READ, self.callback)
 
@@ -58,8 +62,8 @@ class Network:
         self.tcp_client_socket.close()
 
     def authorize(self):
+        self.tcp_client_socket.settimeout(1)
         self.tcp_client_socket.connect(self.tcp_address)
-        self.tcp_client_socket.setblocking(False)
 
     def send(self, data_packet: DataPacket):
         self.tcp_client_socket.send(data_packet.encode() + b'\n')

@@ -23,9 +23,9 @@ else:
 clock = pygame.time.Clock()
 
 from event_codes import *
-from level import Level
-from player import Player
-from screens import Menu, ConnectToServerMenu, LoadingScreen
+from level import Level, Tile
+from player import Player, Bullet
+from screens import Menu, ConnectToServerMenu, LoadingScreen, MessageScreen, StartServerMenu
 
 
 class Camera:
@@ -75,11 +75,11 @@ class Game:
     def __init__(self, clock, level_name="", player_position=(0, 0)):
         self.clock: pygame.time.Clock = clock
         self.offset_x, self.offset_y = 0, 0
-        self.visible = True
 
         self.level = Level(level_name)
         self.player = Player(player_position, 1, "Character")
         self.players: dict[int, Player] = {}
+        self.bullets = {}
 
         self.camera = Camera(self.player)
 
@@ -87,7 +87,9 @@ class Game:
         fps = self.clock.get_fps()
         time_delta = 1 / max(1, fps)
 
-        self.level.update(self.player.x, self.player.y)
+        for bullet_id, bullet in self.bullets.items():
+            bullet.update(time_delta)
+
         self.player.loop(time_delta)
         self.input_handle(time_delta)
         self.camera.update(time_delta)
@@ -104,41 +106,30 @@ class Game:
             player.draw(image, self.offset_x, self.offset_y)
         self.player.draw(image, self.offset_x, self.offset_y)
 
+        for bullet_id, bullet in self.bullets.items():
+            bullet.draw(image, self.offset_x, self.offset_y)
+
         image = pygame.transform.scale_by(image, self.level.scale)
         screen.blit(image, (0, 0))
 
     def input_handle(self, time_delta):
         keys = pygame.key.get_pressed()
         collide_vertical = self.collision_y()
-        collide_left = self.collision_x(min(-1, -int(self.player.v * time_delta)) * 2)
-        collide_right = self.collision_x(max(1, int(self.player.v * time_delta)) * 2)
+        collide_left: list[Tile] = self.collision_x(min(-1, -int(self.player.v * time_delta)) - 1)
+        collide_right: list[Tile] = self.collision_x(max(1, int(self.player.v * time_delta)) + 1)
 
         self.player.vx = 0
         if keys[pygame.K_a] and not collide_left:
             self.player.move_left()
         elif keys[pygame.K_a] and collide_left:
-            l, r = 1, int(self.player.v * time_delta) * 2
-            while r - l > 1:
-                m = (l + r) // 2
-                if self.collision_x(-m):
-                    r = m
-                else:
-                    l = m
-            if l > 1:
-                self.player.move(-l / 4, 0)
+            left = min(self.player.get_left(), max([tile.rect.right for tile in collide_left]))
+            self.player.set_left(left)
 
         if keys[pygame.K_d] and not collide_right:
             self.player.move_right()
         elif keys[pygame.K_d] and collide_right:
-            l, r = 1, int(self.player.v * time_delta) * 2
-            while r - l > 1:
-                m = (l + r) // 2
-                if self.collision_x(m):
-                    r = m
-                else:
-                    l = m
-            if l > 1:
-                self.player.move(l / 4, 0)
+            right = max(self.player.get_right(), min([tile.rect.left for tile in collide_right]))
+            self.player.set_right(right)
 
         if keys[pygame.K_SPACE] and not collide_vertical:
             self.player.jump()
@@ -157,30 +148,28 @@ class Game:
 
     def collision_x(self, dx):
         self.player.move(dx, 0)
-        collided = False
-        for tile in self.level.closest_tiles:
-            if not tile.has_collision:
-                continue
-            if pygame.sprite.collide_mask(self.player, tile):
-                collided = True
-                break
+        collided = self.level.collide_sprite(self.player)
         self.player.move(-dx, 0)
         return collided
 
     def collision_y(self):
-        collided = False
-        for tile in self.level.closest_tiles:
-            if not tile.has_collision:
-                continue
-            if pygame.sprite.collide_mask(self.player, tile):
-                collided = True
-                if self.player.vy > 0:
-                    self.player.rect.bottom = tile.rect.top
-                    self.player.y = self.player.rect.top
-                    self.player.touch_down()
-                elif self.player.vy < 0:
-                    self.player.touch_ceil()
-                    self.player.rect.top = tile.rect.bottom - self.player.sprite_offset_y
+        collided = self.level.collide_sprite(self.player)
+        if not collided:
+            return collided
+
+        lowest_point = collided[0].rect.bottom
+        highest_point = collided[0].rect.top
+        for tile in collided:
+            lowest_point = max(lowest_point, tile.rect.bottom)
+            highest_point = min(highest_point, tile.rect.top)
+
+        if self.player.vy > 0:
+            self.player.set_bottom(highest_point)
+            self.player.touch_down()
+        elif self.player.vy < 0:
+            self.player.set_top(lowest_point)
+            self.player.touch_ceil()
+
         return collided
 
     def apply(self, data):
@@ -193,7 +182,8 @@ class GameManager:
     def __init__(self):
         self.player_flags = set()
         self.network: Network = None
-        self.game = None
+        self.game: Game = None
+        self.game_started = False
 
     def connect(self, server, port):
         self.network = Network(server, port, self.callback)
@@ -214,6 +204,8 @@ class GameManager:
 
         if data_packet.data_type == self.DataPacket.GAME_INFO:
             self.game = Game(clock, data_packet['level_name'], data_packet['position'])
+            self.send_initial_info()
+            self.game_started = True
 
         if data_packet.data_type == self.DataPacket.PLAYERS_INFO:
             for player_id, data in data_packet.data.items():
@@ -230,22 +222,49 @@ class GameManager:
                 if str(player_id) not in data_packet.data.keys():
                     self.game.players.pop(player_id)
 
+        if data_packet.data_type == self.DataPacket.NEW_BULLET_FROM_SERVER:
+            bullet_id, bullet = data_packet.data
+            bullet_id = int(bullet_id)
+            self.game.bullets[bullet_id] = Bullet((bullet[0], bullet[1]), (bullet[2], bullet[3]))
+
+        if data_packet.data_type == self.DataPacket.DELETE_BULLET_FROM_SERVER:
+            bullet_id = data_packet.data
+            bullet_id = int(bullet_id)
+            if bullet_id in self.game.bullets.keys():
+                self.game.bullets.pop(bullet_id)
+
+        if data_packet.data_type == self.DataPacket.HEALTH_POINTS:
+            self.game.player.hp = data_packet.data
+
     def handle_game_objects_collision(self):
-        for object in self.game.level.objects:
+        for object in self.game.level.objects['rectangles']:
             if pygame.rect.Rect.colliderect(object.rect, self.game.player.rect):
                 if self.DataPacket.FLAG_READY not in self.player_flags:
-                    print('ready')
                     self.player_flags.add(self.DataPacket.FLAG_READY)
                     response_data = {'id': self.network.id, 'data': self.DataPacket.FLAG_READY}
                     response = self.DataPacket(self.DataPacket.ADD_PLAYER_FLAG, response_data)
                     self.network.send(response)
             else:
                 if self.DataPacket.FLAG_READY in self.player_flags:
-                    print('not ready')
                     self.player_flags.remove(self.DataPacket.FLAG_READY)
                     response_data = {'id': self.network.id, 'data': self.DataPacket.FLAG_READY}
                     response = self.DataPacket(self.DataPacket.REMOVE_PLAYER_FLAG, response_data)
                     self.network.send(response)
+
+    def shoot_bullet(self):
+        if self.game.player.hp <= 0:
+            return
+        speed = 1200
+        bullet = Bullet(self.game.player.get_center_position(),
+                        (speed if (self.game.player.direction == 'right') else -speed, 0))
+        bullet_data = {'id': self.network.id, 'data': bullet.encode()}
+        response = self.DataPacket(self.DataPacket.NEW_BULLET_FROM_CLIENT, bullet_data)
+        self.network.send(response)
+
+    def send_initial_info(self):
+        player_data = {'id': self.network.id, 'data': self.game.player.initial_info()}
+        response = self.DataPacket(self.DataPacket.INITIAL_INFO, player_data)
+        self.network.send(response)
 
     def send_player_data(self):
         player_data = {'id': self.network.id, 'data': self.game.player.encode()}
@@ -270,7 +289,10 @@ def validate_address(user_input):
         raise ValueError('Not a valid server address')
     server, port = user_input.split(':')
     socket.inet_aton(server)
-    port = int(port)
+    try:
+        port = int(port)
+    except Exception:
+        raise ValueError('Not a valid port number')
     if port < 1 or port > 65535:
         raise ValueError('Not a valid port number')
     return server, port
@@ -287,7 +309,14 @@ def main(screen):
                 run = False
                 break
 
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    if game_manager.game_started:
+                        game_manager.shoot_bullet()
+
             if type(current_screen) == ConnectToServerMenu:
+                current_screen.event_handle(event)
+            if type(current_screen) == StartServerMenu:
                 current_screen.event_handle(event)
 
             if event.type == LOADING_SCREEN_EVENT:
@@ -305,7 +334,10 @@ def main(screen):
                     current_screen = game_manager
                     game_manager.connect(server, port)
                 except Exception as e:
+                    current_screen = MessageScreen(str(e), pygame.event.Event(OPEN_CONNECTION_MENU_EVENT))
                     print(e)
+            if event.type == START_SERVER_MENU_EVENT:
+                current_screen = StartServerMenu()
 
         current_screen.draw(screen)
         pygame.display.set_caption(f"{int(clock.get_fps())} FPS")

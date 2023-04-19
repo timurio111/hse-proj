@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.9" tiledversion="1.9.2" orientation="orthogonal" renderorder="right-down" width="25" height="25" tilewidth="16" tileheight="16" infinite="0" nextlayerid="8" nextobjectid="21">
+<map version="1.9" tiledversion="1.9.2" orientation="orthogonal" renderorder="right-down" width="25" height="25" tilewidth="16" tileheight="16" infinite="0" nextlayerid="8" nextobjectid="30">
  <properties>
   <property name="Scale" type="int" value="1"/>
  </properties>
@@ -102,5 +102,17 @@
  </layer>
  <objectgroup id="7" name="Слой объектов 1">
   <object id="16" x="144" y="320" width="112" height="64"/>
+  <object id="21" x="36.8754" y="34.994">
+   <point/>
+  </object>
+  <object id="22" x="286.725" y="33.8651">
+   <point/>
+  </object>
+  <object id="23" x="29.3498" y="152.769">
+   <point/>
+  </object>
+  <object id="24" x="311.936" y="145.62">
+   <point/>
+  </object>
  </objectgroup>
 </map>
