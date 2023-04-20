@@ -120,8 +120,10 @@ class Level:
         for layer in self.layers:
             if not layer.has_collision:
                 continue
-
-            tile = layer.tiles[int(y // self.info['tile_height'] * self.info['width'] + x // self.info['tile_width'])]
+            tile_number = int(y // self.info['tile_height'] * self.info['width'] + x // self.info['tile_width'])
+            if tile_number < 0 or tile_number >= len(layer.tiles):
+                break
+            tile = layer.tiles[tile_number]
             if tile.mask.get_at((x % self.info['tile_width'], y % self.info['tile_height'])):
                 collided.append(tile)
 
