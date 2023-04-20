@@ -1,3 +1,4 @@
+import queue
 import selectors
 import socket
 import time
@@ -8,7 +9,7 @@ from level import Level, GameObjectPoint
 from network import DataPacket
 
 sel = selectors.DefaultSelector()
-
+event_queue = queue.Queue()
 server = "127.0.0.1"
 tcp_port = 5555
 
@@ -16,6 +17,18 @@ current_id = 0
 client_socket_to_id = {}
 MAX_CONNECTIONS = 10
 c = 0
+
+
+class ServerEvent:
+    EVENT = 0
+    NEW_GAME = 1
+
+    def __init__(self, event_type, delay_seconds=0, callback=None, *args):
+        self.callback = callback
+        self.event_type = event_type
+        self.delay_seconds = delay_seconds
+        self.time_created = time.time()
+        self.args = args
 
 
 class SeverPlayer:
@@ -48,6 +61,9 @@ class SeverPlayer:
 
     def encode(self):
         return [self.x, self.y, self.status, self.direction, self.sprite_animation_counter, self.hp]
+
+    def __repr__(self):
+        return str((self.x, self.y, self.hp))
 
 
 class ServerBullet:
@@ -82,7 +98,7 @@ class GameState:
         self.current_spawn_point = 0
         self.change_level(self.level_name)
 
-        self.game_started = False
+        self.game_ended = False
 
     def change_level(self, level_name):
         self.level_name = level_name
@@ -156,16 +172,23 @@ def send(client_socket: socket.socket, data_packet: DataPacket):
 
 
 def change_level(level_name):
-    game_state.game_started = True
+    print(game_state.players)
+    print('change_level')
+    game_state.game_ended = False
     game_state.change_level(level_name)
 
     for client_socket, player_id in client_socket_to_id.items():
-        game_data = {'level_name': game_state.level_name, 'position': game_state.get_spawn()}
+        game_state.players[player_id].hp = 100
+        spawn_pos = game_state.get_spawn()
+        game_data = {'level_name': game_state.level_name, 'position': spawn_pos}
+        game_state.players[player_id].x, game_state.players[player_id].y = spawn_pos
 
         response = DataPacket(DataPacket.GAME_INFO, game_data).encode()
         if GameState.STATUS_PLAYING in game_state.players[player_id].flags:
             game_state.players[player_id].flags.remove(GameState.STATUS_PLAYING)
         client_socket.send(response + b'\n')
+    print(game_state.players)
+    print()
 
 
 def handle_tcp(client_socket: socket.socket, mask):
@@ -194,8 +217,9 @@ def handle_tcp(client_socket: socket.socket, mask):
         game_state.players[client_id].flags.add(GameState.STATUS_PLAYING)
 
     if data_packet.data_type == DataPacket.CLIENT_PLAYER_INFO:
-        data = data_packet['data']
-        game_state.players[client_id].apply(data)
+        if GameState.STATUS_PLAYING in game_state.players[client_id].flags:
+            data = data_packet['data']
+            game_state.players[client_id].apply(data)
 
     if data_packet.data_type == DataPacket.ADD_PLAYER_FLAG:
         game_state.players[client_id].flags.add(data_packet['data'])
@@ -232,15 +256,36 @@ def get_tcp_socket():
 
 def update(time_delta):
     if not game_state.players:
+        if game_state.level_name != 'lobby':
+            change_level('lobby')
         return
 
-    if all([DataPacket.FLAG_READY in player.flags for player in game_state.players.values()]):
-        change_level('firstmap')
+    if game_state.game_ended:
         return
 
-    if len(game_state.players) > 1 and sum([player.hp > 0 for player in game_state.players.values()]) == 1:
-        change_level('firstmap')
+    if all([DataPacket.FLAG_READY in player.flags for player in game_state.players.values()]) \
+            and not game_state.game_ended:
+        game_state.game_ended = True
+        event_queue.put(ServerEvent(ServerEvent.EVENT, 1, change_level, 'firstmap'))
         return
+
+    if len(game_state.players) > 1 and sum([player.hp > 0 for player in game_state.players.values()]) == 1 \
+            and not game_state.game_ended:
+        print('trigger')
+        print(game_state.players)
+        print()
+        game_state.game_ended = True
+        event_queue.put(ServerEvent(ServerEvent.EVENT, 1, change_level, 'firstmap'))
+        return
+
+    for client_socket, client_id in client_socket_to_id.items():
+        if client_id in game_state.players.keys() and game_state.players[client_id].y > 3000:
+            if game_state.players[client_id].hp == 0:
+                continue
+            print("fell down")
+            game_state.players[client_id].hp = 0
+            data_packet = DataPacket(DataPacket.HEALTH_POINTS, game_state.players[client_id].hp)
+            send(client_socket, data_packet)
 
     def delete_bullet(bullet_id):
         for client_socket, client_id in client_socket_to_id.items():
@@ -264,6 +309,7 @@ def update(time_delta):
                 continue
 
             if game_state.players[client_id].sprite_rect.collidepoint(bullet.get_position()):
+                print('bullet')
                 game_state.players[client_id].hp -= bullet.damage
                 data_packet = DataPacket(DataPacket.HEALTH_POINTS, game_state.players[client_id].hp)
                 send(client_socket, data_packet)
@@ -282,6 +328,13 @@ def main():
 
     while True:
         if time.time() - last_tick >= tick:
+            for _ in range(event_queue.qsize()):
+                event = event_queue.get()
+                if time.time() > event.time_created + event.delay_seconds:
+                    event.callback(*event.args)
+                else:
+                    event_queue.put(event)
+
             time_delta = time.time() - last_tick
             last_tick = time.time()
             update(time_delta)
