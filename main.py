@@ -7,8 +7,6 @@ from config import WIDTH, HEIGHT, MAX_FPS, FULLSCREEN
 from network import Network
 
 pygame.init()
-pygame.scrap.init()
-pygame.scrap.set_mode(pygame.SCRAP_CLIPBOARD)
 
 if FULLSCREEN:
     config.HEIGHT = pygame.display.Info().current_h
