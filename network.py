@@ -21,7 +21,6 @@ class DataPacket:
     FLAG_READY = 100
 
     def __init__(self, data_type, data=None):
-        print(data)
         self.data_type = data_type
         self.data = dict() if (data is None) else data
 

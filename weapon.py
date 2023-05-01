@@ -61,6 +61,5 @@ class Weapon():
 
 
     def draw(self, screen, coords):
-        print(self.sprite)
         screen.blit(self.sprite, coords)
         screen.blit(self.hands_sprite, coords)

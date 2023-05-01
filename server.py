@@ -55,9 +55,6 @@ class SeverPlayer:
         return SeverPlayer(player_id, *data)
 
     def apply(self, data):
-        print('-----')
-        print(data)
-        print('-------')
         self.x, self.y, self.status, self.direction, self.sprite_animation_counter, self.hp, self.weapon_name = data
         self.sprite_rect.x = self.x + self.sprite_offset_x
         self.sprite_rect.y = self.y + self.sprite_offset_y

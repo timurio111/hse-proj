@@ -200,7 +200,6 @@ class Player():
                 self.hp, self.ch_data, self.weapon.name]
 
     def apply(self, data):
-        print(data, 'деееейт')
         self.rect.x = data[0]
         self.rect.y = data[1]
         self.status = data[2]
