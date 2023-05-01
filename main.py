@@ -273,6 +273,7 @@ class GameManager:
         self.network.receive()
 
     def draw(self, screen: pygame.Surface):
+
         self.receive()
         if self.game is None:
             LoadingScreen().draw(screen)

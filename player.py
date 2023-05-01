@@ -2,7 +2,7 @@ import os
 
 import pygame
 import yaml
-
+from weapon import Weapon
 def load_character_sprites(name: str, scale: int) -> (dict[str, list[pygame.surface.Surface]], dict[str, int]):
     path = os.path.join("data", "PlayerSprites", name)
     ch_data = {}
@@ -76,7 +76,7 @@ class Player():
         self.current_weapons = []
         self.is_holding_weapon = False
 
-        self.weapon = Weapon('just_hands')
+        self.weapon = Weapon('pistol', (100, 100))
 
     def get_position(self):
         x = self.x + self.ch_data['RECT_WIDTH'] // 2
@@ -113,7 +113,8 @@ class Player():
             return
 
         self.sprite_animation_counter += 1
-        self.weapon.upd
+        self.weapon.update_sprite(self.direction)
+
     def move_left(self):
         if self.hp <= 0:
             return
@@ -187,18 +188,19 @@ class Player():
     def draw(self, screen, offset_x, offset_y):
 
         screen.blit(self.sprite, (self.rect.x + offset_x, self.rect.y + offset_y))
-#        self.weapon.draw(self.sprite, (self.rect.x + offset_x, self.rect.y + offset_y))
-    #  self.draw_weapon_and_hands(self.sprite, (self.rect.x + offset_x, self.rect.y + offset_y))
+        self.weapon.draw(screen, (self.rect.x + offset_x, self.rect.y + offset_y))
+
 
     def encode(self):
         return [self.rect.x, self.rect.y, self.status, self.direction, self.sprite_animation_counter,
-                self.hp]
+                self.hp, self.weapon.name]
 
     def initial_info(self):
         return [self.rect.x, self.rect.y, self.status, self.direction, self.sprite_animation_counter,
-                self.hp, self.ch_data]
+                self.hp, self.ch_data, self.weapon.name]
 
     def apply(self, data):
+        print(data, 'деееейт')
         self.rect.x = data[0]
         self.rect.y = data[1]
         self.status = data[2]
@@ -208,6 +210,8 @@ class Player():
         sprite_name = self.status + '_' + self.direction
         sprite_index = (self.sprite_animation_counter // self.sprites_change_rate) % len(self.sprites[sprite_name])
         self.sprite = self.sprites[sprite_name][sprite_index]
+        self.weapon.name = data[6]
+        self.weapon.update_sprite(self.direction)
 
 
 class Bullet:

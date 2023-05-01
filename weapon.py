@@ -38,23 +38,29 @@ def load_weapon_sprites(name: str, scale: int) -> (dict[str, list[pygame.surface
                 sprites_dict[state + "_left"].append(pygame.transform.flip(sprite, True, False))
     return sprites_dict, weapon_data
 
-print(load_weapon_sprites('WeaponSprites', 1))
-
 class Weapon():
+    all_weapons_sprites, all_weapons_info = load_weapon_sprites('WeaponSprites', 1)
     def __init__(self, name, pos):
         self.sprite: pygame.Surface = None
+        self.hands_sprite: pygame.Surface = None
         self.name = name
         self.rectangle = None
         self.x = pos[0]
         self.y = pos[1]
+        self.hands_name = 'just_hands'      #Заменить на спрайты для конкретного оружия
+        self.direction = 'left'
+        self.update_sprite('left')
 
-        self.rectangle = pygame.rect.Rect(pos, )
-        all_wepons_sprites = load_weapon_sprites('WeaponSprites', 1)
+
 
     def update_sprite(self, direction):
-        self.sprite = self.name + direction
+        self.direction = direction
+        self.sprite = Weapon.all_weapons_sprites[self.name + '_' + direction][0]
+        self.hands_sprite = Weapon.all_weapons_sprites[self.hands_name +  '_' + direction][0]
 
 
 
     def draw(self, screen, coords):
+        print(self.sprite)
         screen.blit(self.sprite, coords)
+        screen.blit(self.hands_sprite, coords)
