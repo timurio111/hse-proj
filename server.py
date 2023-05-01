@@ -32,7 +32,7 @@ class ServerEvent:
 
 
 class SeverPlayer:
-    def __init__(self, player_id, x, y, status, direction, sprite_animation_counter, hp, ch_data):
+    def __init__(self, player_id, x, y, status, direction, sprite_animation_counter, hp, ch_data, weapon_name):
         self.id = player_id
         self.x = x
         self.y = y
@@ -41,7 +41,7 @@ class SeverPlayer:
         self.sprite_animation_counter = sprite_animation_counter
         self.hp = hp
         self.ch_data = ch_data
-
+        self.weapon_name = weapon_name
         self.sprite_offset_x = (self.ch_data['RECT_WIDTH'] - self.ch_data['CHARACTER_WIDTH']) // 2
         self.sprite_offset_y = self.ch_data['RECT_HEIGHT'] - self.ch_data['CHARACTER_HEIGHT']
 
@@ -55,12 +55,13 @@ class SeverPlayer:
         return SeverPlayer(player_id, *data)
 
     def apply(self, data):
-        self.x, self.y, self.status, self.direction, self.sprite_animation_counter, self.hp = data
+        self.x, self.y, self.status, self.direction, self.sprite_animation_counter, self.hp, self.weapon_name = data
         self.sprite_rect.x = self.x + self.sprite_offset_x
         self.sprite_rect.y = self.y + self.sprite_offset_y
 
     def encode(self):
-        return [self.x, self.y, self.status, self.direction, self.sprite_animation_counter, self.hp]
+
+        return [self.x, self.y, self.status, self.direction, self.sprite_animation_counter, self.hp, self.weapon_name]
 
     def __repr__(self):
         return str((self.x, self.y, self.hp))

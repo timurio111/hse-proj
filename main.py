@@ -75,7 +75,7 @@ class Game:
         self.offset_x, self.offset_y = 0, 0
 
         self.level = Level(level_name)
-        self.player = Player(player_position, 1, "Character")
+        self.player = Player(player_position, 1, "New_Knight")
         self.players: dict[int, Player] = {}
         self.bullets = {}
 
@@ -212,7 +212,7 @@ class GameManager:
                     continue
 
                 if player_id not in self.game.players.keys():
-                    self.game.players[player_id] = Player((0, 0), 1, "Character")
+                    self.game.players[player_id] = Player((0, 0), 1, "New_Knight")
 
                 self.game.players[player_id].apply(data)
 
@@ -273,6 +273,7 @@ class GameManager:
         self.network.receive()
 
     def draw(self, screen: pygame.Surface):
+
         self.receive()
         if self.game is None:
             LoadingScreen().draw(screen)
