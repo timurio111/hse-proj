@@ -60,7 +60,6 @@ class SeverPlayer:
         self.sprite_rect.y = self.y + self.sprite_offset_y
 
     def encode(self):
-
         return [self.x, self.y, self.status, self.direction, self.sprite_animation_counter, self.hp, self.weapon_name]
 
     def __repr__(self):
@@ -133,12 +132,12 @@ def accept_connection(server_socket: socket.socket, mask):
     current_id += 1
 
     auth_data = {'id': client_socket_to_id[client_socket]}
-    response = DataPacket(DataPacket.AUTH, auth_data).encode()
-    client_socket.send(response + b'\n')
+    response = DataPacket(DataPacket.AUTH, auth_data)
+    send(client_socket, response)
 
     game_data = {'level_name': 'lobby', 'position': game_state.get_spawn()}
-    response = DataPacket(DataPacket.GAME_INFO, game_data).encode()
-    client_socket.send(response + b'\n')
+    response = DataPacket(DataPacket.GAME_INFO, game_data)
+    send(client_socket, response)
 
     sel.register(fileobj=client_socket, events=selectors.EVENT_READ, data=handle_tcp)
 
@@ -163,9 +162,9 @@ def send_players_data(client_socket: socket.socket):
         if GameState.STATUS_PLAYING not in game_state.players[player_id].flags:
             continue
         players_data[player_id] = game_state.players[player_id].encode()
-    response = DataPacket(DataPacket.PLAYERS_INFO, players_data).encode()
+    response = DataPacket(DataPacket.PLAYERS_INFO, players_data)
 
-    client_socket.send(response + b'\n')
+    send(client_socket, response)
 
 
 def send(client_socket: socket.socket, data_packet: DataPacket):
@@ -182,10 +181,10 @@ def change_level(level_name):
         game_data = {'level_name': game_state.level_name, 'position': spawn_pos}
         game_state.players[player_id].x, game_state.players[player_id].y = spawn_pos
 
-        response = DataPacket(DataPacket.GAME_INFO, game_data).encode()
+        response = DataPacket(DataPacket.GAME_INFO, game_data)
         if GameState.STATUS_PLAYING in game_state.players[player_id].flags:
             game_state.players[player_id].flags.remove(GameState.STATUS_PLAYING)
-        client_socket.send(response + b'\n')
+        send(client_socket, response)
 
 
 def handle_tcp(client_socket: socket.socket, mask):
