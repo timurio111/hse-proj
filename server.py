@@ -173,8 +173,6 @@ def send(client_socket: socket.socket, data_packet: DataPacket):
 
 
 def change_level(level_name):
-    print(game_state.players)
-    print('change_level')
     game_state.game_ended = False
     game_state.change_level(level_name)
 
@@ -188,8 +186,6 @@ def change_level(level_name):
         if GameState.STATUS_PLAYING in game_state.players[player_id].flags:
             game_state.players[player_id].flags.remove(GameState.STATUS_PLAYING)
         client_socket.send(response + b'\n')
-    print(game_state.players)
-    print()
 
 
 def handle_tcp(client_socket: socket.socket, mask):
@@ -272,9 +268,6 @@ def update(time_delta):
 
     if len(game_state.players) > 1 and sum([player.hp > 0 for player in game_state.players.values()]) == 1 \
             and not game_state.game_ended:
-        print('trigger')
-        print(game_state.players)
-        print()
         game_state.game_ended = True
         event_queue.put(ServerEvent(ServerEvent.EVENT, 1, change_level, 'firstmap'))
         return
@@ -283,7 +276,6 @@ def update(time_delta):
         if client_id in game_state.players.keys() and game_state.players[client_id].y > 3000:
             if game_state.players[client_id].hp == 0:
                 continue
-            print("fell down")
             game_state.players[client_id].hp = 0
             data_packet = DataPacket(DataPacket.HEALTH_POINTS, game_state.players[client_id].hp)
             send(client_socket, data_packet)
@@ -310,7 +302,6 @@ def update(time_delta):
                 continue
 
             if game_state.players[client_id].sprite_rect.collidepoint(bullet.get_position()):
-                print('bullet')
                 game_state.players[client_id].hp -= bullet.damage
                 data_packet = DataPacket(DataPacket.HEALTH_POINTS, game_state.players[client_id].hp)
                 send(client_socket, data_packet)
