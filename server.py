@@ -1,6 +1,5 @@
+import asyncio
 import queue
-import selectors
-import socket
 import time
 
 import pygame
@@ -8,7 +7,6 @@ import pygame
 from level import Level, GameObjectPoint
 from network import DataPacket
 
-sel = selectors.DefaultSelector()
 event_queue = queue.Queue()
 server = "127.0.0.1"
 tcp_port = 5555
@@ -120,43 +118,50 @@ class GameState:
 game_state = GameState()
 
 
-def accept_connection(server_socket: socket.socket, mask):
+async def read(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> bytes:
+    return await reader.readline()
+
+
+async def accept_connection(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     global current_id, client_socket_to_id
 
-    server_socket.listen(MAX_CONNECTIONS)
-    client_socket, address = server_socket.accept()
-    client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-
-    client_socket.setblocking(False)
-    client_socket_to_id[client_socket] = current_id
+    client_socket_to_id[(reader, writer)] = current_id
     current_id += 1
 
-    auth_data = {'id': client_socket_to_id[client_socket]}
+    auth_data = {'id': client_socket_to_id[(reader, writer)]}
     response = DataPacket(DataPacket.AUTH, auth_data)
-    send(client_socket, response)
+    await send(writer, response)
 
     game_data = {'level_name': 'lobby', 'position': game_state.get_spawn()}
     response = DataPacket(DataPacket.GAME_INFO, game_data)
-    send(client_socket, response)
+    await send(writer, response)
 
-    sel.register(fileobj=client_socket, events=selectors.EVENT_READ, data=handle_tcp)
+    print(f"New connection. Id={client_socket_to_id[(reader, writer)]}")
 
-    print(f"New connection from {address}. Id={client_socket_to_id[client_socket]}")
+    while True:
+
+        data = await read(reader, writer)
+        data_packet = DataPacket.from_bytes(data)
+        await handle_packet(data_packet, writer)
+        if data == b'':
+            break
+
+    await disconnect(reader, writer)
 
 
-def disconnect(client_socket):
-    sel.unregister(client_socket)
-    client_socket.close()
-    client_id = client_socket_to_id[client_socket]
+async def disconnect(reader, writer):
+    client_id = client_socket_to_id[(reader, writer)]
 
     if client_id in game_state.players.keys():
         game_state.players.pop(client_id)
 
-    client_socket_to_id.pop(client_socket)
+    client_socket_to_id.pop((reader, writer))
+    writer.close()
+    await writer.wait_closed()
     print(f'client with id {client_id} disconnected')
 
 
-def send_players_data(client_socket: socket.socket):
+async def send_players_data(writer: asyncio.StreamWriter):
     players_data = dict()
     for player_id in game_state.players.keys():
         if GameState.STATUS_PLAYING not in game_state.players[player_id].flags:
@@ -164,11 +169,12 @@ def send_players_data(client_socket: socket.socket):
         players_data[player_id] = game_state.players[player_id].encode()
     response = DataPacket(DataPacket.PLAYERS_INFO, players_data)
 
-    send(client_socket, response)
+    await send(writer, response)
 
 
-def send(client_socket: socket.socket, data_packet: DataPacket):
-    client_socket.send(data_packet.encode() + b'\n')
+async def send(writer: asyncio.StreamWriter, data_packet: DataPacket):
+    writer.write(data_packet.encode() + b'\n')
+    await writer.drain()
 
 
 def change_level(level_name):
@@ -187,24 +193,7 @@ def change_level(level_name):
         send(client_socket, response)
 
 
-def handle_tcp(client_socket: socket.socket, mask):
-    try:
-        data_bytes = b''
-        while True:
-            byte = client_socket.recv(1)
-            if byte == b'\n':
-                break
-            data_bytes += byte
-    except Exception as e:
-        print(e)
-        disconnect(client_socket)
-        return
-
-    if not data_bytes:
-        disconnect(client_socket)
-        return
-
-    data_packet = DataPacket.from_bytes(data_bytes)
+async def handle_packet(data_packet: DataPacket, writer: asyncio.StreamWriter):
     client_id = data_packet['id']
 
     if data_packet.data_type == DataPacket.INITIAL_INFO:
@@ -234,20 +223,10 @@ def handle_tcp(client_socket: socket.socket, mask):
         game_state.bullets[bullet_id] = bullet
 
         response = DataPacket(DataPacket.NEW_BULLET_FROM_SERVER, [bullet_id, bullet_data])
-        for client_socket, player_id in client_socket_to_id.items():
-            send(client_socket, response)
+        for (reader, writer), player_id in client_socket_to_id.items():
+            await send(writer, response)
 
-    send_players_data(client_socket)
-
-
-def get_tcp_socket():
-    tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    tcp_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-    tcp_socket.setblocking(False)
-    tcp_socket.bind((server, tcp_port))
-    tcp_socket.listen(MAX_CONNECTIONS)
-    return tcp_socket
+    await send_players_data(writer)
 
 
 def update(time_delta):
@@ -307,34 +286,38 @@ def update(time_delta):
                 delete_bullet(bullet_id)
 
 
-def main():
-    tcp_socket = get_tcp_socket()
-
-    print("Server is up waiting...")
-
-    sel.register(tcp_socket, selectors.EVENT_READ, data=accept_connection)
-
-    tick = 1 / 60
+async def loop():
+    tick_rate = 1
     last_tick = time.time()
 
     while True:
-        if time.time() - last_tick >= tick:
-            for _ in range(event_queue.qsize()):
-                event = event_queue.get()
-                if time.time() > event.time_created + event.delay_seconds:
-                    event.callback(*event.args)
-                else:
-                    event_queue.put(event)
+        for _ in range(event_queue.qsize()):
+            event = event_queue.get()
+            if time.time() > event.time_created + event.delay_seconds:
+                event.callback(*event.args)
+            else:
+                event_queue.put(event)
 
-            time_delta = time.time() - last_tick
-            last_tick = time.time()
-            update(time_delta)
+        time_delta = time.time() - last_tick
+        update(time_delta)
 
-        events = sel.select(timeout=0)
-        for key, mask in events:
-            callback = key.data
-            callback(key.fileobj, mask)
+        await asyncio.sleep(tick_rate)
+
+
+async def main():
+    # tcp_socket = get_tcp_socket()
+    tcp_server = await asyncio.start_server(accept_connection, server, tcp_port)
+
+    print("Server is up waiting...")
+
+    loop_task = asyncio.create_task(loop())
+
+    await loop_task
+    async with tcp_server:
+        await tcp_server.serve_forever()
+
+    return
 
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main(), debug=True)
