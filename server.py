@@ -1,5 +1,4 @@
 import asyncio
-import queue
 import time
 
 import pygame
@@ -7,29 +6,16 @@ import pygame
 from level import Level, GameObjectPoint
 from network import DataPacket
 
-event_queue = queue.Queue()
+DEBUG = True
+
 server = "127.0.0.1"
 tcp_port = 5555
 
 current_id = 0
 client_socket_to_id = {}
-MAX_CONNECTIONS = 10
-c = 0
 
 
-class ServerEvent:
-    EVENT = 0
-    NEW_GAME = 1
-
-    def __init__(self, event_type, delay_seconds=0, callback=None, *args):
-        self.callback = callback
-        self.event_type = event_type
-        self.delay_seconds = delay_seconds
-        self.time_created = time.time()
-        self.args = args
-
-
-class SeverPlayer:
+class ServerPlayer:
     def __init__(self, player_id, x, y, status, direction, sprite_animation_counter, hp, ch_data, weapon_name):
         self.id = player_id
         self.x = x
@@ -40,6 +26,9 @@ class SeverPlayer:
         self.hp = hp
         self.ch_data = ch_data
         self.weapon_name = weapon_name
+        self.vx = 0
+        self.vy = 0
+        self.off_ground_counter = 0
         self.sprite_offset_x = (self.ch_data['RECT_WIDTH'] - self.ch_data['CHARACTER_WIDTH']) // 2
         self.sprite_offset_y = self.ch_data['RECT_HEIGHT'] - self.ch_data['CHARACTER_HEIGHT']
 
@@ -50,15 +39,17 @@ class SeverPlayer:
 
     @staticmethod
     def from_player_data(player_id, data):
-        return SeverPlayer(player_id, *data)
+        return ServerPlayer(player_id, *data)
 
     def apply(self, data):
-        self.x, self.y, self.status, self.direction, self.sprite_animation_counter, self.hp, self.weapon_name = data
+        self.x, self.y, self.status, self.direction, self.sprite_animation_counter, self.hp, self.weapon_name, \
+            self.vx, self.vy, self.off_ground_counter = data
         self.sprite_rect.x = self.x + self.sprite_offset_x
         self.sprite_rect.y = self.y + self.sprite_offset_y
 
     def encode(self):
-        return [self.x, self.y, self.status, self.direction, self.sprite_animation_counter, self.hp, self.weapon_name]
+        return [self.x, self.y, self.status, self.direction, self.sprite_animation_counter, self.hp, self.weapon_name,
+                self.vx, self.vy, self.off_ground_counter]
 
     def __repr__(self):
         return str((self.x, self.y, self.hp))
@@ -87,7 +78,7 @@ class GameState:
     STATUS_PLAYING = 3
 
     def __init__(self):
-        self.players: dict[int, SeverPlayer] = dict()
+        self.players: dict[int, ServerPlayer] = dict()
         self.bullets: dict[int, ServerBullet] = dict()
 
         self.level_name = 'lobby'
@@ -118,10 +109,6 @@ class GameState:
 game_state = GameState()
 
 
-async def read(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> bytes:
-    return await reader.readline()
-
-
 async def accept_connection(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     global current_id, client_socket_to_id
 
@@ -139,8 +126,11 @@ async def accept_connection(reader: asyncio.StreamReader, writer: asyncio.Stream
     print(f"New connection. Id={client_socket_to_id[(reader, writer)]}")
 
     while True:
-
-        data = await read(reader, writer)
+        try:
+            data = await read(reader, writer)
+        except Exception as e:
+            print(e)
+            break
         data_packet = DataPacket.from_bytes(data)
         await handle_packet(data_packet, writer)
         if data == b'':
@@ -161,6 +151,10 @@ async def disconnect(reader, writer):
     print(f'client with id {client_id} disconnected')
 
 
+async def read(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> bytes:
+    return await reader.readline()
+
+
 async def send_players_data(writer: asyncio.StreamWriter):
     players_data = dict()
     for player_id in game_state.players.keys():
@@ -177,11 +171,11 @@ async def send(writer: asyncio.StreamWriter, data_packet: DataPacket):
     await writer.drain()
 
 
-def change_level(level_name):
+async def change_level(level_name):
     game_state.game_ended = False
     game_state.change_level(level_name)
 
-    for client_socket, player_id in client_socket_to_id.items():
+    for (reader, writer), player_id in client_socket_to_id.items():
         game_state.players[player_id].hp = 100
         spawn_pos = game_state.get_spawn()
         game_data = {'level_name': game_state.level_name, 'position': spawn_pos}
@@ -190,7 +184,7 @@ def change_level(level_name):
         response = DataPacket(DataPacket.GAME_INFO, game_data)
         if GameState.STATUS_PLAYING in game_state.players[player_id].flags:
             game_state.players[player_id].flags.remove(GameState.STATUS_PLAYING)
-        send(client_socket, response)
+        await send(writer, response)
 
 
 async def handle_packet(data_packet: DataPacket, writer: asyncio.StreamWriter):
@@ -198,7 +192,7 @@ async def handle_packet(data_packet: DataPacket, writer: asyncio.StreamWriter):
 
     if data_packet.data_type == DataPacket.INITIAL_INFO:
         data = data_packet['data']
-        game_state.players[client_id] = SeverPlayer.from_player_data(client_id, data)
+        game_state.players[client_id] = ServerPlayer.from_player_data(client_id, data)
         game_state.players[client_id].flags.add(GameState.STATUS_PLAYING)
 
     if data_packet.data_type == DataPacket.CLIENT_PLAYER_INFO:
@@ -229,10 +223,10 @@ async def handle_packet(data_packet: DataPacket, writer: asyncio.StreamWriter):
     await send_players_data(writer)
 
 
-def update(time_delta):
+async def update(time_delta):
     if not game_state.players:
         if game_state.level_name != 'lobby':
-            change_level('lobby')
+            await change_level('lobby')
         return
 
     if game_state.game_ended:
@@ -241,39 +235,42 @@ def update(time_delta):
     if all([DataPacket.FLAG_READY in player.flags for player in game_state.players.values()]) \
             and not game_state.game_ended:
         game_state.game_ended = True
-        event_queue.put(ServerEvent(ServerEvent.EVENT, 1, change_level, 'firstmap'))
+        await asyncio.sleep(1)
+        await change_level('firstmap')
         return
 
     if len(game_state.players) > 1 and sum([player.hp > 0 for player in game_state.players.values()]) == 1 \
             and not game_state.game_ended:
         game_state.game_ended = True
-        event_queue.put(ServerEvent(ServerEvent.EVENT, 1, change_level, 'firstmap'))
+        await asyncio.sleep(1)
+        await change_level('firstmap')
         return
 
-    for client_socket, client_id in client_socket_to_id.items():
+    for (reader, writer), client_id in client_socket_to_id.items():
         if client_id in game_state.players.keys() and game_state.players[client_id].y > 3000:
             if game_state.players[client_id].hp == 0:
                 continue
             game_state.players[client_id].hp = 0
             data_packet = DataPacket(DataPacket.HEALTH_POINTS, game_state.players[client_id].hp)
-            send(client_socket, data_packet)
+            await send(writer, data_packet)
 
-    def delete_bullet(bullet_id):
-        for client_socket, client_id in client_socket_to_id.items():
+    async def delete_bullet(bullet_id):
+        for (reader, writer), client_id in client_socket_to_id.items():
             data_packet = DataPacket(DataPacket.DELETE_BULLET_FROM_SERVER, bullet_id)
-            send(client_socket, data_packet)
-        game_state.bullets.pop(bullet_id)
+            await send(writer, data_packet)
+        if bullet_id in game_state.bullets.keys():
+            game_state.bullets.pop(bullet_id)
 
     for bullet_id in list(game_state.bullets.keys()):
         bullet = game_state.bullets[bullet_id]
         bullet.update(time_delta)
         if bullet.lifetime > 1 or game_state.level.collide_point(*bullet.get_position()):
-            delete_bullet(bullet_id)
+            await delete_bullet(bullet_id)
 
     for bullet_id in list(game_state.bullets):
         bullet = game_state.bullets[bullet_id]
 
-        for client_socket, client_id in client_socket_to_id.items():
+        for (reader, writer), client_id in client_socket_to_id.items():
             if game_state.players[client_id].hp <= 0:
                 continue
             if GameState.STATUS_PLAYING not in game_state.players[client_id].flags:
@@ -282,30 +279,23 @@ def update(time_delta):
             if game_state.players[client_id].sprite_rect.collidepoint(bullet.get_position()):
                 game_state.players[client_id].hp -= bullet.damage
                 data_packet = DataPacket(DataPacket.HEALTH_POINTS, game_state.players[client_id].hp)
-                send(client_socket, data_packet)
-                delete_bullet(bullet_id)
+                await send(writer, data_packet)
+                await delete_bullet(bullet_id)
 
 
 async def loop():
-    tick_rate = 1
+    tick_rate = 60
     last_tick = time.time()
 
     while True:
-        for _ in range(event_queue.qsize()):
-            event = event_queue.get()
-            if time.time() > event.time_created + event.delay_seconds:
-                event.callback(*event.args)
-            else:
-                event_queue.put(event)
-
         time_delta = time.time() - last_tick
-        update(time_delta)
+        last_tick = time.time()
 
-        await asyncio.sleep(tick_rate)
+        await update(time_delta)
+        await asyncio.sleep(1 / tick_rate)
 
 
 async def main():
-    # tcp_socket = get_tcp_socket()
     tcp_server = await asyncio.start_server(accept_connection, server, tcp_port)
 
     print("Server is up waiting...")
@@ -320,4 +310,4 @@ async def main():
 
 
 if __name__ == '__main__':
-    asyncio.run(main(), debug=True)
+    asyncio.run(main(), debug=DEBUG)

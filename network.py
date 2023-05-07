@@ -69,10 +69,15 @@ class Network:
         self.tcp_client_socket.send(data_packet.encode() + b'\n')
 
     def receive(self):
+        received = False
+
         while True:
             events = self.sel.select(timeout=0)
             if not events:
                 break
+            received = True
             for key, mask in events:
                 callback = key.data
                 callback(key.fileobj, mask)
+
+        return received

@@ -2,7 +2,10 @@ import os
 
 import pygame
 import yaml
+
 from weapon import Weapon
+
+
 def load_character_sprites(name: str, scale: int) -> (dict[str, list[pygame.surface.Surface]], dict[str, int]):
     path = os.path.join("data", "PlayerSprites", name)
     ch_data = {}
@@ -34,7 +37,6 @@ def load_character_sprites(name: str, scale: int) -> (dict[str, list[pygame.surf
             sprites_dict[state + "_left"].append(pygame.transform.flip(sprite, True, False))
 
     return sprites_dict, ch_data
-
 
 
 class Player():
@@ -88,7 +90,6 @@ class Player():
         y += self.ch_data['CHARACTER_HEIGHT'] // 2
         return x, y
 
-
     def update_sprite(self, time_delta):
 
         if self.hp <= 0 and self.status != 'deathNoMovement':
@@ -106,13 +107,13 @@ class Player():
             self.status = 'run'
 
         sprite_name = self.status + '_' + self.direction
-        sprite_index = (self.sprite_animation_counter // self.sprites_change_rate) % len(self.sprites[sprite_name])
+        sprite_index = int((self.sprite_animation_counter // self.sprites_change_rate) % len(self.sprites[sprite_name]))
         self.sprite = self.sprites[sprite_name][sprite_index]
 
         if self.status == 'deathNoMovement' and sprite_index == len(self.sprites[sprite_name]) - 1:
             return
 
-        self.sprite_animation_counter += 1
+        self.sprite_animation_counter += time_delta * 60
         self.weapon.update_sprite(self.direction)
 
     def move_left(self):
@@ -190,10 +191,9 @@ class Player():
         screen.blit(self.sprite, (self.rect.x + offset_x, self.rect.y + offset_y))
         self.weapon.draw(screen, (self.rect.x + offset_x, self.rect.y + offset_y))
 
-
     def encode(self):
         return [self.rect.x, self.rect.y, self.status, self.direction, self.sprite_animation_counter,
-                self.hp, self.weapon.name]
+                self.hp, self.weapon.name, self.vx, self.vy, self.off_ground_counter]
 
     def initial_info(self):
         return [self.rect.x, self.rect.y, self.status, self.direction, self.sprite_animation_counter,
@@ -202,15 +202,20 @@ class Player():
     def apply(self, data):
         self.rect.x = data[0]
         self.rect.y = data[1]
+        self.x = self.rect.x
+        self.y = self.rect.y
         self.status = data[2]
         self.direction = data[3]
         self.sprite_animation_counter = data[4] - 1
         self.hp = data[5]
         sprite_name = self.status + '_' + self.direction
         sprite_index = (self.sprite_animation_counter // self.sprites_change_rate) % len(self.sprites[sprite_name])
-        self.sprite = self.sprites[sprite_name][sprite_index]
+        self.sprite = self.sprites[sprite_name][int(sprite_index)]
         self.weapon.name = data[6]
         self.weapon.update_sprite(self.direction)
+        self.vx = data[7]
+        self.vy = data[8]
+        self.off_ground_counter = data[9]
 
 
 class Bullet:

@@ -70,8 +70,9 @@ class Camera:
 
 
 class Game:
-    def __init__(self, clock, level_name="", player_position=(0, 0)):
+    def __init__(self, clock, game_manager, level_name="", player_position=(0, 0)):
         self.clock: pygame.time.Clock = clock
+        self.game_manager = game_manager
         self.offset_x, self.offset_y = 0, 0
 
         self.level = Level(level_name)
@@ -84,9 +85,13 @@ class Game:
     def update(self):
         fps = self.clock.get_fps()
         time_delta = 1 / max(1, fps)
-
         for bullet_id, bullet in self.bullets.items():
             bullet.update(time_delta)
+
+        if not self.game_manager.packet_received:
+            for player_id, player in self.players.items():
+                player.loop(time_delta)
+                self.collision_y(player)
 
         self.player.loop(time_delta)
         self.input_handle(time_delta)
@@ -112,9 +117,9 @@ class Game:
 
     def input_handle(self, time_delta):
         keys = pygame.key.get_pressed()
-        collide_vertical = self.collision_y()
-        collide_left: list[Tile] = self.collision_x(min(-1, -int(self.player.v * time_delta)) - 1)
-        collide_right: list[Tile] = self.collision_x(max(1, int(self.player.v * time_delta)) + 1)
+        collide_vertical = self.collision_y(self.player)
+        collide_left: list[Tile] = self.collision_x(self.player, min(-1, -int(self.player.v * time_delta)) - 1)
+        collide_right: list[Tile] = self.collision_x(self.player, max(1, int(self.player.v * time_delta)) + 1)
 
         self.player.vx = 0
         if keys[pygame.K_a] and not collide_left:
@@ -144,14 +149,14 @@ class Game:
             self.level.radius -= 4
             pass
 
-    def collision_x(self, dx):
-        self.player.move(dx, 0)
-        collided = self.level.collide_sprite(self.player)
-        self.player.move(-dx, 0)
+    def collision_x(self, player, dx):
+        player.move(dx, 0)
+        collided = self.level.collide_sprite(player)
+        player.move(-dx, 0)
         return collided
 
-    def collision_y(self):
-        collided = self.level.collide_sprite(self.player)
+    def collision_y(self, player):
+        collided = self.level.collide_sprite(player)
         if not collided:
             return collided
 
@@ -161,12 +166,12 @@ class Game:
             lowest_point = max(lowest_point, tile.rect.bottom)
             highest_point = min(highest_point, tile.rect.top)
 
-        if self.player.vy > 0:
-            self.player.set_bottom(highest_point)
-            self.player.touch_down()
-        elif self.player.vy < 0:
-            self.player.set_top(lowest_point)
-            self.player.touch_ceil()
+        if player.vy > 0:
+            player.set_bottom(highest_point)
+            player.touch_down()
+        elif player.vy < 0:
+            player.set_top(lowest_point)
+            player.touch_ceil()
 
         return collided
 
@@ -178,6 +183,7 @@ class GameManager:
     from network import DataPacket
 
     def __init__(self):
+        self.packet_received = True
         self.player_flags = set()
         self.network: Network = None
         self.game: Game = None
@@ -201,7 +207,7 @@ class GameManager:
             self.network.id = data_packet.data['id']
 
         if data_packet.data_type == self.DataPacket.GAME_INFO:
-            self.game = Game(clock, data_packet['level_name'], data_packet['position'])
+            self.game = Game(clock, self, data_packet['level_name'], data_packet['position'])
             self.send_initial_info()
             self.game_started = True
 
@@ -270,11 +276,11 @@ class GameManager:
         self.network.send(response)
 
     def receive(self):
-        self.network.receive()
+        return self.network.receive()
 
     def draw(self, screen: pygame.Surface):
 
-        self.receive()
+        self.packet_received = self.receive()
         if self.game is None:
             LoadingScreen().draw(screen)
         else:
