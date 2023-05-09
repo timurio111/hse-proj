@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import asyncio.streams
 import json
 import selectors
 import socket
@@ -13,10 +16,14 @@ class DataPacket:
     CLIENT_PLAYER_INFO = 7
     ADD_PLAYER_FLAG = 8
     REMOVE_PLAYER_FLAG = 9
-    NEW_BULLET_FROM_CLIENT = 10
-    NEW_BULLET_FROM_SERVER = 11
+    NEW_SHOT_FROM_CLIENT = 10
+    NEW_SHOT_FROM_SERVER = 11
     DELETE_BULLET_FROM_SERVER = 12
     HEALTH_POINTS = 13
+    NEW_WEAPON_FROM_SERVER = 14
+    CLIENT_PICKED_WEAPON = 15
+    CLIENT_DROPPED_WEAPON = 16
+    CLIENT_PICK_WEAPON_REQUEST = 17
 
     FLAG_READY = 100
 
@@ -25,11 +32,11 @@ class DataPacket:
         self.data = dict() if (data is None) else data
 
     @classmethod
-    def from_bytes(cls, packet: bytes):
+    def from_bytes(cls, packet: bytes) -> DataPacket:
         packet = json.loads(packet)
         return DataPacket(packet['data_type'], packet['data'])
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key, value) -> None:
         self.data[key] = value
 
     def __getitem__(self, item):

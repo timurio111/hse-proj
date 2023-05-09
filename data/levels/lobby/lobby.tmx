@@ -101,17 +101,17 @@
 </data>
  </layer>
  <objectgroup id="7" name="Слой объектов 1">
-  <object id="16" x="144" y="320" width="112" height="64"/>
-  <object id="21" x="36.8754" y="34.994">
+  <object id="16" name="game_start" x="144" y="320" width="112" height="64"/>
+  <object id="21" name="spawnpoint" x="61.3172" y="93.5335">
    <point/>
   </object>
-  <object id="22" x="286.725" y="33.8651">
+  <object id="22" name="spawnpoint" x="294.943" y="93.2911">
    <point/>
   </object>
-  <object id="23" x="29.3498" y="152.769">
+  <object id="23" name="spawnpoint" x="64.6546" y="203.463">
    <point/>
   </object>
-  <object id="24" x="311.936" y="145.62">
+  <object id="24" name="spawnpoint" x="295.499" y="204.73">
    <point/>
   </object>
  </objectgroup>

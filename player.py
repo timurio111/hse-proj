@@ -39,7 +39,7 @@ def load_character_sprites(name: str, scale: int) -> (dict[str, list[pygame.surf
     return sprites_dict, ch_data
 
 
-class Player():
+class Player:
     def __init__(self, pos, scale, name):
 
         self.sprites, self.ch_data = load_character_sprites(name, scale)
@@ -63,6 +63,7 @@ class Player():
         self.vx = 0
         self.vy = 0
         self.x, self.y = pos
+        self.width, self.height = self.ch_data['CHARACTER_WIDTH'], self.ch_data['CHARACTER_HEIGHT']
 
         self.off_ground_counter = 0
         self.jump_counter = 0
@@ -74,11 +75,8 @@ class Player():
 
         self.sprite_animation_counter = 0
 
-        self.inventory = []
-        self.current_weapons = []
-        self.is_holding_weapon = False
-
-        self.weapon = Weapon('pistol', (100, 100))
+        self.weapon = None
+        self.attach_weapon(Weapon('WeaponNone', owner=self))
 
     def get_position(self):
         x = self.x + self.ch_data['RECT_WIDTH'] // 2
@@ -89,6 +87,12 @@ class Player():
         x, y = self.get_position()
         y += self.ch_data['CHARACTER_HEIGHT'] // 2
         return x, y
+
+    def attach_weapon(self, weapon: Weapon):
+        if self.weapon:
+            self.weapon.detach()
+        self.weapon = weapon
+        self.weapon.attach(self)
 
     def update_sprite(self, time_delta):
 
@@ -114,7 +118,8 @@ class Player():
             return
 
         self.sprite_animation_counter += time_delta * 60
-        self.weapon.update_sprite(self.direction)
+
+        self.weapon.update_sprite(time_delta)
 
     def move_left(self):
         if self.hp <= 0:
@@ -187,17 +192,16 @@ class Player():
         self.move(self.vx * time_delta, self.vy * time_delta)
 
     def draw(self, screen, offset_x, offset_y):
-
         screen.blit(self.sprite, (self.rect.x + offset_x, self.rect.y + offset_y))
-        self.weapon.draw(screen, (self.rect.x + offset_x, self.rect.y + offset_y))
+        self.weapon.draw(screen, offset_x, offset_y)
 
     def encode(self):
         return [self.rect.x, self.rect.y, self.status, self.direction, self.sprite_animation_counter,
-                self.hp, self.weapon.name, self.vx, self.vy, self.off_ground_counter]
+                self.hp, self.vx, self.vy, self.off_ground_counter]
 
     def initial_info(self):
         return [self.rect.x, self.rect.y, self.status, self.direction, self.sprite_animation_counter,
-                self.hp, self.ch_data, self.weapon.name]
+                self.hp, self.ch_data]
 
     def apply(self, data):
         self.rect.x = data[0]
@@ -211,11 +215,9 @@ class Player():
         sprite_name = self.status + '_' + self.direction
         sprite_index = (self.sprite_animation_counter // self.sprites_change_rate) % len(self.sprites[sprite_name])
         self.sprite = self.sprites[sprite_name][int(sprite_index)]
-        self.weapon.name = data[6]
-        self.weapon.update_sprite(self.direction)
-        self.vx = data[7]
-        self.vy = data[8]
-        self.off_ground_counter = data[9]
+        self.vx = data[6]
+        self.vy = data[7]
+        self.off_ground_counter = data[8]
 
 
 class Bullet:
@@ -237,4 +239,4 @@ class Bullet:
         self.y += dy
 
     def draw(self, screen: pygame.Surface, offset_x, offset_y):
-        pygame.draw.circle(screen, (255, 255, 255), (self.x + offset_x, self.y + offset_y), 5)
+        pygame.draw.circle(screen, (255, 255, 255), (self.x + offset_x, self.y + offset_y), 2)
