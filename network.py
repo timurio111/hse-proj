@@ -27,14 +27,15 @@ class DataPacket:
 
     FLAG_READY = 100
 
-    def __init__(self, data_type, data=None):
+    def __init__(self, data_type, data=None, headers=None):
         self.data_type = data_type
         self.data = dict() if (data is None) else data
+        self.headers = dict() if (headers is None) else headers
 
     @classmethod
     def from_bytes(cls, packet: bytes) -> DataPacket:
         packet = json.loads(packet)
-        return DataPacket(packet['data_type'], packet['data'])
+        return DataPacket(packet['data_type'], packet['data'], packet['headers'])
 
     def __setitem__(self, key, value) -> None:
         self.data[key] = value
@@ -45,7 +46,8 @@ class DataPacket:
     def encode(self) -> bytes:
         datagram = {
             'data_type': self.data_type,
-            'data': self.data
+            'data': self.data,
+            'headers': self.headers
         }
         return json.dumps(datagram).encode()
 

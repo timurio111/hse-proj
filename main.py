@@ -203,6 +203,8 @@ class Game:
 class GameManager:
     from network import DataPacket
 
+    game_id = 0
+
     def __init__(self):
         self.packet_received = True
         self.player_flags = set()
@@ -223,11 +225,13 @@ class GameManager:
                 break
             data_bytes += byte
         data_packet = self.DataPacket.from_bytes(data_bytes)
+        game_id = data_packet.headers['game_id']
 
         if data_packet.data_type == self.DataPacket.AUTH:
             self.network.id = data_packet.data['id']
 
         if data_packet.data_type == self.DataPacket.GAME_INFO:
+            GameManager.game_id = game_id
             self.game = Game(clock, self, data_packet['level_name'], data_packet['position'])
             self.send_initial_info()
             self.game_started = True
@@ -296,15 +300,15 @@ class GameManager:
             if pygame.rect.Rect.colliderect(object.rect, self.game.player.rect):
                 if self.DataPacket.FLAG_READY not in self.player_flags:
                     self.player_flags.add(self.DataPacket.FLAG_READY)
-                    response_data = {'id': self.network.id, 'data': self.DataPacket.FLAG_READY}
-                    response = self.DataPacket(self.DataPacket.ADD_PLAYER_FLAG, response_data)
-                    self.network.send(response)
+                    response_data = {'data': self.DataPacket.FLAG_READY}
+                    response = self.DataPacket(self.DataPacket.ADD_PLAYER_FLAG, response_data, )
+                    self.send(response)
             else:
                 if self.DataPacket.FLAG_READY in self.player_flags:
                     self.player_flags.remove(self.DataPacket.FLAG_READY)
-                    response_data = {'id': self.network.id, 'data': self.DataPacket.FLAG_READY}
+                    response_data = {'data': self.DataPacket.FLAG_READY}
                     response = self.DataPacket(self.DataPacket.REMOVE_PLAYER_FLAG, response_data)
-                    self.network.send(response)
+                    self.send(response)
 
     def shoot_bullet(self):
         if self.game.player.hp <= 0:
@@ -312,15 +316,17 @@ class GameManager:
         if self.game.player.weapon.name == "WeaponNone":
             return
         speed = 1200
-        bullet = Bullet(self.game.player.get_center_position(),
+        bullet_pos = self.game.player.get_center_position()
+        bullet_pos = (bullet_pos[0] + (16 if self.game.player.direction == 'right' else -16), bullet_pos[1])
+        bullet = Bullet(bullet_pos,
                         (speed if (self.game.player.direction == 'right') else -speed, 0))
         bullet_data = {'id': self.network.id, 'data': bullet.encode()}
         response = self.DataPacket(self.DataPacket.NEW_SHOT_FROM_CLIENT, bullet_data)
-        self.network.send(response)
+        self.send(response)
 
     def pick_up_weapon(self):
-        response = self.DataPacket(self.DataPacket.CLIENT_PICK_WEAPON_REQUEST, {'id': self.network.id})
-        self.network.send(response)
+        response = self.DataPacket(self.DataPacket.CLIENT_PICK_WEAPON_REQUEST)
+        self.send(response)
 
     def drop_weapon(self):
         if self.game.player.weapon.name == 'WeaponNone':
@@ -332,19 +338,24 @@ class GameManager:
                 dropped_weapon_id = weapon_id
                 break
         response = self.DataPacket(self.DataPacket.CLIENT_DROPPED_WEAPON,
-                                   {'id': self.network.id, 'weapon_id': dropped_weapon_id,
+                                   {'weapon_id': dropped_weapon_id,
                                     'weapon_position': (self.game.player.weapon.get_position())})
-        self.network.send(response)
+        self.send(response)
 
     def send_initial_info(self):
-        player_data = {'id': self.network.id, 'data': self.game.player.initial_info()}
+        player_data = {'data': self.game.player.initial_info()}
         response = self.DataPacket(self.DataPacket.INITIAL_INFO, player_data)
-        self.network.send(response)
+        self.send(response)
 
     def send_player_data(self):
-        player_data = {'id': self.network.id, 'data': self.game.player.encode()}
+        player_data = {'data': self.game.player.encode()}
         response = self.DataPacket(self.DataPacket.CLIENT_PLAYER_INFO, player_data)
-        self.network.send(response)
+        self.send(response)
+
+    def send(self, data_packet):
+        data_packet.headers['id'] = self.network.id
+        data_packet.headers['game_id'] = self.game_id
+        self.network.send(data_packet)
 
     def receive(self):
         return self.network.receive()

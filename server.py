@@ -117,6 +117,8 @@ class GameState:
     STATUS_CONNECTED = 2
     STATUS_PLAYING = 3
 
+    game_id = 0
+
     def __init__(self):
         self.players: dict[int, ServerPlayer] = dict()
         self.bullets: dict[int, ServerBullet] = dict()
@@ -131,6 +133,8 @@ class GameState:
         self.game_ended = False
 
     def change_level(self, level_name) -> None:
+        GameState.game_id += 1
+
         self.level_name = level_name
         for player_id, player in self.players.items():
             if DataPacket.FLAG_READY in player.flags:
@@ -179,7 +183,7 @@ async def accept_connection(reader: asyncio.StreamReader, writer: asyncio.Stream
         try:
             data = await read(reader)
         except Exception as e:
-            print(e)
+            print(type(e))
             break
         data_packet = DataPacket.from_bytes(data)
         await handle_packet(data_packet, writer)
@@ -217,6 +221,7 @@ async def send_players_data(writer: asyncio.StreamWriter):
 
 
 async def send(writer: asyncio.StreamWriter, data_packet: DataPacket):
+    data_packet.headers['game_id'] = game_state.game_id
     writer.write(data_packet.encode() + b'\n')
     await writer.drain()
 
@@ -237,6 +242,8 @@ async def change_level(level_name):
             game_state.players[player_id].flags.remove(GameState.STATUS_PLAYING)
         await send(writer, response)
 
+        await send_players_data(writer)
+
         for weapon_id, weapon in game_state.weapons.items():
             weapon_data = {'weapon_id': weapon_id, 'weapon_data': weapon.encode()}
             response = DataPacket(DataPacket.NEW_WEAPON_FROM_SERVER, weapon_data)
@@ -244,7 +251,10 @@ async def change_level(level_name):
 
 
 async def handle_packet(data_packet: DataPacket, writer: asyncio.StreamWriter):
-    client_id: int = data_packet['id']
+    client_id: int = data_packet.headers['id']
+
+    if data_packet.headers['game_id'] != game_state.game_id:
+        return
 
     if data_packet.data_type == DataPacket.INITIAL_INFO:
         data = data_packet['data']
@@ -265,7 +275,6 @@ async def handle_packet(data_packet: DataPacket, writer: asyncio.StreamWriter):
             game_state.players[client_id].flags.remove(flag)
 
     if data_packet.data_type == DataPacket.NEW_SHOT_FROM_CLIENT:
-
         bullet_data = data_packet['data']
         bullet = ServerBullet(*bullet_data)
         bullet_id = ServerBullet.bullet_id
@@ -323,7 +332,7 @@ async def update(time_delta):
 
     # Все игроки готовы начать игру (флаг устанавливается в лобби)
     if all([DataPacket.FLAG_READY in player.flags for player in game_state.players.values()]) \
-            and not game_state.game_ended:
+            and not game_state.game_ended and len(game_state.players) > 1:
         game_state.game_ended = True
         await asyncio.sleep(1)
         await change_level('firstmap')
@@ -349,20 +358,22 @@ async def update(time_delta):
             await send(writer, data_packet)
 
     async def delete_bullet(bullet_id):  # Рассылает всем пакет, о том, что пуля с id=bullet_id удалена
+        if bullet_id not in game_state.bullets.keys():
+            return
         game_state.bullets.pop(bullet_id)
         for (reader, writer), client_id in client_socket_to_id.items():
             data_packet = DataPacket(DataPacket.DELETE_BULLET_FROM_SERVER, bullet_id)
             await send(writer, data_packet)
 
-    for bullet_id in list(game_state.bullets.keys()):
+    for bullet_id in list(game_state.bullets):
         bullet = game_state.bullets[bullet_id]
         bullet.update(time_delta)
+
         if bullet.current_lifetime_seconds > bullet.max_lifetime_seconds or \
                 game_state.level.collide_point(*bullet.get_position()):
             await delete_bullet(bullet_id)
+            continue
 
-    for bullet_id in list(game_state.bullets):
-        bullet = game_state.bullets[bullet_id]
         for (reader, writer), client_id in client_socket_to_id.items():
             if game_state.players[client_id].hp <= 0:
                 continue
