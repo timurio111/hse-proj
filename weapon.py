@@ -27,8 +27,13 @@ def load_weapon_sprites(scale: int) -> (dict[str, list[pygame.surface.Surface]],
                 weapon_data[directory]['OFFSET_X_LEFT'] = data['OFFSET_X_LEFT']
                 weapon_data[directory]['OFFSET_X_RIGHT'] = data['OFFSET_X_RIGHT']
                 weapon_data[directory]['OFFSET_Y'] = data['OFFSET_Y']
+                weapon_data[directory]['BULLET_SPEED'] = data['BUlLET_SPEED']
+                weapon_data[directory]['BULLET_DAMAGE'] = data['BULLET_DAMAGE']
                 weapon_data[directory]['PATRONS'] = data['PATRONS']
                 weapon_data[directory]['RELOAD_T'] = data['RELOAD_T']
+                weapon_data[directory]['BARREL_OFFSET_X'] = data['BARREL_OFFSET_X']
+                weapon_data[directory]['BARREL_OFFSET_Y'] = data['BARREL_OFFSET_Y']
+                weapon_data[directory]['FRAME_RATE'] = data['FRAME_RATE']
             except yaml.YAMLError as exc:
                 print(exc)
         for filename in os.listdir(os.path.join(path, directory)):
@@ -56,7 +61,7 @@ def load_weapon_sprites(scale: int) -> (dict[str, list[pygame.surface.Surface]],
 class Weapon:
     all_weapons_sprites, all_weapons_info = load_weapon_sprites(1)
 
-    def __init__(self, name, pos=None, owner=None):
+    def __init__(self, name, ammo=0, pos=None, owner=None):
         self.attached = False
         self.owner = None  # Reference to player
 
@@ -64,6 +69,8 @@ class Weapon:
         self.name = name
         self.weapon_sprite: pygame.Surface = None
         self.arms_sprite: pygame.Surface = None
+        self.ammo = ammo
+        self.damage = Weapon.all_weapons_info[self.name]['BULLET_DAMAGE']
 
         if pos:
             self.direction = 'right'
@@ -76,7 +83,7 @@ class Weapon:
 
         # Everything is measured in seconds
         self.animation_switch_timer: float = 0
-        self.animation_switch_time: float = 0.1
+        self.animation_switch_time: float = Weapon.all_weapons_info[self.name]['FRAME_RATE']
 
         self.sprite_number = 0
 
@@ -92,11 +99,25 @@ class Weapon:
 
     def shoot(self):
         if self.name == 'WeaponNone':
-            return
+            return None
+        if self.status == 'shoot':
+            return None
+        if self.ammo <= 0:
+            return None
+        self.ammo -= 1
         self.status = 'shoot'
         self.sprite_number = 0
 
+        speed_x = (1 if self.direction == 'right' else -1) * Weapon.all_weapons_info[self.name]['BULLET_SPEED']
+
+        return Bullet(self.get_barrel_position(), (speed_x, 0), self.damage)
+
     def update_sprite(self, time_delta):
+        if self.attached:
+            self.direction = self.owner.direction
+            self.x = self.owner.rect.x + Weapon.all_weapons_info[self.name][f'OFFSET_X_{self.direction.upper()}']
+            self.y = self.owner.rect.y + Weapon.all_weapons_info[self.name]['OFFSET_Y']
+
         self.animation_switch_timer += time_delta
         if self.animation_switch_timer >= self.animation_switch_time:
             self.sprite_number += 1
@@ -111,23 +132,30 @@ class Weapon:
             self.animation_switch_timer = 0
 
         if self.attached:
-            direction = self.owner.direction
             self.arms_sprite = \
-                Weapon.all_weapons_sprites[f'{self.name}_arms_{self.status}_{direction}'][self.sprite_number]
+                Weapon.all_weapons_sprites[f'{self.name}_arms_{self.status}_{self.direction}'][self.sprite_number]
             self.weapon_sprite = \
-                Weapon.all_weapons_sprites[f'{self.name}_{self.status}_{direction}'][self.sprite_number]
+                Weapon.all_weapons_sprites[f'{self.name}_{self.status}_{self.direction}'][self.sprite_number]
         else:
             self.weapon_sprite = \
                 Weapon.all_weapons_sprites[f'{self.name}_{self.status}_{self.direction}'][self.sprite_number]
 
     def get_position(self):
-        if self.attached:
-            direction = self.owner.direction.upper()
-            x = self.owner.rect.x + Weapon.all_weapons_info[self.name][f'OFFSET_X_{direction}']
-            y = self.owner.rect.y + Weapon.all_weapons_info[self.name]['OFFSET_Y']
-            return x, y
+        return self.x, self.y
+
+    def get_barrel_position(self):
+        if self.direction == 'right':
+            x = self.x + Weapon.all_weapons_info[self.name]['IMAGE_OFFSET_X'] + \
+                Weapon.all_weapons_info[self.name]['BARREL_OFFSET_X']
+            y = self.y + Weapon.all_weapons_info[self.name]['IMAGE_OFFSET_Y'] + \
+                Weapon.all_weapons_info[self.name]['BARREL_OFFSET_Y']
         else:
-            return self.x, self.y
+            x = self.x + Weapon.all_weapons_info[self.name]['WEAPON_RECT_WIDTH'] - Weapon.all_weapons_info[self.name][
+                'IMAGE_OFFSET_X'] - \
+                Weapon.all_weapons_info[self.name]['BARREL_OFFSET_X']
+            y = self.y + Weapon.all_weapons_info[self.name]['IMAGE_OFFSET_Y'] + \
+                Weapon.all_weapons_info[self.name]['BARREL_OFFSET_Y']
+        return x, y
 
     def draw(self, screen: pygame.Surface, offset_x, offset_y):
         if self.attached:
@@ -140,3 +168,26 @@ class Weapon:
         else:
             weapon_position = (self.x + offset_x, self.y + offset_y)
             screen.blit(self.weapon_sprite, weapon_position)
+
+
+class Bullet:
+    def __init__(self, position, speed, damage):
+        self.damage = damage
+        self.x, self.y = position
+        self.vx, self.vy = speed
+        self.image = pygame.surface.Surface((10, 10))
+        self.image.fill((255, 255, 255))
+
+    def encode(self):
+        return [self.x, self.y, self.vx, self.vy, self.damage]
+
+    def apply(self, data):
+        self.x, self.y, self.vx, self.vy = data
+
+    def update(self, time_delta):
+        dx, dy = self.vx * time_delta, self.vy * time_delta
+        self.x += dx
+        self.y += dy
+
+    def draw(self, screen: pygame.Surface, offset_x, offset_y):
+        pygame.draw.circle(screen, (255, 255, 255), (self.x + offset_x, self.y + offset_y), 2)

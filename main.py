@@ -24,8 +24,8 @@ clock = pygame.time.Clock()
 
 from event_codes import *
 from level import Level, Tile
-from player import Player, Bullet
-from weapon import Weapon
+from player import Player
+from weapon import Weapon, Bullet
 from screens import Menu, ConnectToServerMenu, LoadingScreen, MessageScreen, StartServerMenu
 
 
@@ -101,6 +101,10 @@ class Game:
                 player.loop(time_delta)
                 self.collision_y(player)
 
+        self.player.loop(time_delta)
+        self.input_handle(time_delta)
+        self.camera.update(time_delta)
+
         for weapon_id, weapon in self.weapons.items():
             weapon.update_sprite(time_delta)
 
@@ -110,9 +114,7 @@ class Game:
             if player.weapon.name == 'WeaponNone':
                 player.weapon.update_sprite(time_delta)
 
-        self.player.loop(time_delta)
-        self.input_handle(time_delta)
-        self.camera.update(time_delta)
+
 
     def draw(self, screen):
         image = pygame.Surface((WIDTH // self.level.scale, HEIGHT // self.level.scale))
@@ -169,6 +171,9 @@ class Game:
         if keys[pygame.K_RIGHT]:
             self.level.radius -= 4
             pass
+
+        if keys[pygame.K_RETURN]:
+            self.game_manager.shoot_bullet()
 
     def collision_x(self, player, dx):
         player.move(dx, 0)
@@ -255,7 +260,7 @@ class GameManager:
             client_id, bullet_id, bullet = data_packet.data
 
             bullet_id = int(bullet_id)
-            self.game.bullets[bullet_id] = Bullet((bullet[0], bullet[1]), (bullet[2], bullet[3]))
+            self.game.bullets[bullet_id] = Bullet((bullet[0], bullet[1]), (bullet[2], bullet[3]), bullet[4])
             if client_id == self.network.id:
                 self.game.player.weapon.shoot()
             else:
@@ -272,8 +277,8 @@ class GameManager:
 
         if data_packet.data_type == self.DataPacket.NEW_WEAPON_FROM_SERVER:
             weapon_id = data_packet['weapon_id']
-            weapon_name, weapon_x, weapon_y = data_packet['weapon_data']
-            self.game.weapons[weapon_id] = Weapon(weapon_name, (weapon_x, weapon_y))
+            weapon_name, weapon_x, weapon_y, weapon_ammo = data_packet['weapon_data']
+            self.game.weapons[weapon_id] = Weapon(name=weapon_name, ammo=weapon_ammo, pos=(weapon_x, weapon_y))
 
         if data_packet.data_type == self.DataPacket.CLIENT_PICKED_WEAPON:
             client_id = data_packet['owner_id']
@@ -288,12 +293,14 @@ class GameManager:
             client_id = data_packet['owner_id']
             weapon_id = data_packet['weapon_id']
             weapon_position = data_packet['weapon_position']
+            weapon_direction = data_packet['weapon_direction']
 
             if client_id == self.network.id:
                 self.game.player.attach_weapon(Weapon('WeaponNone', owner=self.game.player))
             else:
                 self.game.players[client_id].attach_weapon(Weapon('WeaponNone', owner=self.game.players[client_id]))
             self.game.weapons[weapon_id].x, self.game.weapons[weapon_id].y = weapon_position
+            self.game.weapons[weapon_id].direction = weapon_direction
 
     def handle_game_objects_collision(self):
         for object in self.game.level.objects['rectangles']:
@@ -315,11 +322,10 @@ class GameManager:
             return
         if self.game.player.weapon.name == "WeaponNone":
             return
-        speed = 1200
-        bullet_pos = self.game.player.get_center_position()
-        bullet_pos = (bullet_pos[0] + (16 if self.game.player.direction == 'right' else -16), bullet_pos[1])
-        bullet = Bullet(bullet_pos,
-                        (speed if (self.game.player.direction == 'right') else -speed, 0))
+        bullet = self.game.player.weapon.shoot()
+        if bullet is None:
+            return
+
         bullet_data = {'id': self.network.id, 'data': bullet.encode()}
         response = self.DataPacket(self.DataPacket.NEW_SHOT_FROM_CLIENT, bullet_data)
         self.send(response)
@@ -339,7 +345,9 @@ class GameManager:
                 break
         response = self.DataPacket(self.DataPacket.CLIENT_DROPPED_WEAPON,
                                    {'weapon_id': dropped_weapon_id,
-                                    'weapon_position': (self.game.player.weapon.get_position())})
+                                    'weapon_direction': self.game.player.weapon.direction,
+                                    'weapon_position': (self.game.player.weapon.get_position()),
+                                    'weapon_ammo': self.game.player.weapon.ammo})
         self.send(response)
 
     def send_initial_info(self):
@@ -397,8 +405,6 @@ def main(screen):
 
             if event.type == pygame.KEYDOWN:
                 if game_manager.game_started:
-                    if event.key == pygame.K_RETURN:
-                        game_manager.shoot_bullet()
                     if event.key == pygame.K_j:
                         if game_manager.game.player.weapon.name == 'WeaponNone':
                             game_manager.pick_up_weapon()

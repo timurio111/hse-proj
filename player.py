@@ -220,23 +220,3 @@ class Player:
         self.off_ground_counter = data[8]
 
 
-class Bullet:
-    def __init__(self, position, speed):
-        self.x, self.y = position
-        self.vx, self.vy = speed
-        self.image = pygame.surface.Surface((10, 10))
-        self.image.fill((255, 255, 255))
-
-    def encode(self):
-        return [self.x, self.y, self.vx, self.vy]
-
-    def apply(self, data):
-        self.x, self.y, self.vx, self.vy = data
-
-    def update(self, time_delta):
-        dx, dy = self.vx * time_delta, self.vy * time_delta
-        self.x += dx
-        self.y += dy
-
-    def draw(self, screen: pygame.Surface, offset_x, offset_y):
-        pygame.draw.circle(screen, (255, 255, 255), (self.x + offset_x, self.y + offset_y), 2)

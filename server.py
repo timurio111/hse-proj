@@ -65,11 +65,10 @@ class ServerPlayer:
 class ServerBullet:
     bullet_id = 0
 
-    def __init__(self, x: int, y: int, vx: int, vy: int):
-        self.x, self.y, self.vx, self.vy = x, y, vx, vy
+    def __init__(self, x: int, y: int, vx: int, vy: int, damage: int):
+        self.x, self.y, self.vx, self.vy, self.damage = x, y, vx, vy, damage
         self.current_lifetime_seconds = 0
         self.max_lifetime_seconds = 1
-        self.damage = 300
 
     def update(self, timedelta: int) -> None:
         self.current_lifetime_seconds += timedelta
@@ -86,6 +85,7 @@ class ServerWeapon:
     def __init__(self, name, x, y):
         self.owner = None
         self.name = name
+        self.ammo = Weapon.all_weapons_info[self.name]['PATRONS']
 
         weapon_rect_height = Weapon.all_weapons_info[name]['WEAPON_RECT_HEIGHT']
         weapon_rect_width = Weapon.all_weapons_info[name]['WEAPON_RECT_WIDTH']
@@ -95,21 +95,26 @@ class ServerWeapon:
         image_height = Weapon.all_weapons_info[name]['IMAGE_HEIGHT']
 
         self.center_offset_x = image_offset_x + image_width // 2
-        self.center_offset_y = image_offset_y + image_height
-        self.rect = pygame.Rect(x - self.center_offset_x, y - self.center_offset_y,
-                                weapon_rect_height, weapon_rect_width)
+        self.center_offset_y = image_offset_x + image_height // 2
+        self.bottom_offset_y = image_offset_y + image_height
+        self.rect = pygame.Rect(x - self.center_offset_x, y - self.bottom_offset_y,
+                                weapon_rect_width, weapon_rect_height)
+        self.direction = 'right'
 
     def update(self):
         pass
 
     def get_center(self) -> tuple[int, int]:
-        return self.rect.x + self.center_offset_x, self.rect.y + self.center_offset_y
+        if self.direction == 'right':
+            return self.rect.x + self.center_offset_x, self.rect.y + self.bottom_offset_y
+        elif self.direction == 'left':
+            return self.rect.right - self.center_offset_x, self.rect.y + self.bottom_offset_y
 
     def pick_up(self, player_id):
         pass
 
     def encode(self):
-        return [self.name, self.rect.x, self.rect.y]
+        return [self.name, self.rect.x, self.rect.y, self.ammo]
 
 
 class GameState:
@@ -153,6 +158,7 @@ class GameState:
                 self.spawn_points.append(point)
             if 'Weapon' in point.name:
                 self.weapons[ServerWeapon.weapon_id] = ServerWeapon(point.name, point.x, point.y)
+                ServerWeapon.weapon_id += 1
 
     def get_spawn_point(self) -> tuple[int, int]:
         spawn_point = self.spawn_points[self.current_spawn_point]
@@ -173,11 +179,11 @@ async def accept_connection(reader: asyncio.StreamReader, writer: asyncio.Stream
     response = DataPacket(DataPacket.AUTH, auth_data)
     await send(writer, response)
 
+    print(f"New connection. Id={client_socket_to_id[(reader, writer)]}")
+
     game_data = {'level_name': 'lobby', 'position': game_state.get_spawn_point()}
     response = DataPacket(DataPacket.GAME_INFO, game_data)
     await send(writer, response)
-
-    print(f"New connection. Id={client_socket_to_id[(reader, writer)]}")
 
     while True:
         try:
@@ -185,10 +191,10 @@ async def accept_connection(reader: asyncio.StreamReader, writer: asyncio.Stream
         except Exception as e:
             print(type(e))
             break
-        data_packet = DataPacket.from_bytes(data)
-        await handle_packet(data_packet, writer)
         if data == b'':
             break
+        data_packet = DataPacket.from_bytes(data)
+        await handle_packet(data_packet, writer)
 
     await disconnect(reader, writer)
 
@@ -294,7 +300,7 @@ async def handle_packet(data_packet: DataPacket, writer: asyncio.StreamWriter):
             if weapon.owner is not None:
                 continue
             distance = pygame.math.Vector2(weapon.get_center()).distance_to(game_state.players[client_id].get_center())
-            if distance > 16:
+            if distance > 32:
                 continue
             if distance < min_dist:
                 min_dist = distance
@@ -309,11 +315,16 @@ async def handle_packet(data_packet: DataPacket, writer: asyncio.StreamWriter):
 
     if data_packet.data_type == DataPacket.CLIENT_DROPPED_WEAPON:
         weapon_id = data_packet['weapon_id']
+        weapon_direction = data_packet['weapon_direction']
         weapon_position = data_packet['weapon_position']
         game_state.weapons[weapon_id].owner = None
         game_state.weapons[weapon_id].rect.x, game_state.weapons[weapon_id].rect.y = weapon_position
+        game_state.weapons[weapon_id].direction = weapon_direction
         response = DataPacket(DataPacket.CLIENT_DROPPED_WEAPON,
-                              {'owner_id': client_id, 'weapon_id': weapon_id, 'weapon_position': weapon_position})
+                              {'owner_id': client_id,
+                               'weapon_id': weapon_id,
+                               'weapon_position': weapon_position,
+                               'weapon_direction': weapon_direction})
         for (reader, writer), player_id in client_socket_to_id.items():
             await send(writer, response)
 
