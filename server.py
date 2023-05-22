@@ -317,6 +317,7 @@ async def handle_packet(data_packet: DataPacket, writer: asyncio.StreamWriter):
         weapon_id = data_packet['weapon_id']
         weapon_direction = data_packet['weapon_direction']
         weapon_position = data_packet['weapon_position']
+        weapon_ammo = data_packet['weapon_ammo']
         game_state.weapons[weapon_id].owner = None
         game_state.weapons[weapon_id].rect.x, game_state.weapons[weapon_id].rect.y = weapon_position
         game_state.weapons[weapon_id].direction = weapon_direction
@@ -324,7 +325,8 @@ async def handle_packet(data_packet: DataPacket, writer: asyncio.StreamWriter):
                               {'owner_id': client_id,
                                'weapon_id': weapon_id,
                                'weapon_position': weapon_position,
-                               'weapon_direction': weapon_direction})
+                               'weapon_direction': weapon_direction,
+                               'weapon_ammo': weapon_ammo})
         for (reader, writer), player_id in client_socket_to_id.items():
             await send(writer, response)
 

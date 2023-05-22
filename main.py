@@ -294,6 +294,7 @@ class GameManager:
             weapon_id = data_packet['weapon_id']
             weapon_position = data_packet['weapon_position']
             weapon_direction = data_packet['weapon_direction']
+            weapon_ammo = data_packet['weapon_ammo']
 
             if client_id == self.network.id:
                 self.game.player.attach_weapon(Weapon('WeaponNone', owner=self.game.player))
@@ -301,6 +302,7 @@ class GameManager:
                 self.game.players[client_id].attach_weapon(Weapon('WeaponNone', owner=self.game.players[client_id]))
             self.game.weapons[weapon_id].x, self.game.weapons[weapon_id].y = weapon_position
             self.game.weapons[weapon_id].direction = weapon_direction
+            self.game.weapons[weapon_id].ammo = weapon_ammo
 
     def handle_game_objects_collision(self):
         for object in self.game.level.objects['rectangles']:
