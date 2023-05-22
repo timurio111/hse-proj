@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.9" tiledversion="1.9.2" orientation="orthogonal" renderorder="right-down" width="30" height="30" tilewidth="16" tileheight="16" infinite="0" nextlayerid="5" nextobjectid="13">
+<map version="1.9" tiledversion="1.9.2" orientation="orthogonal" renderorder="right-down" width="30" height="30" tilewidth="16" tileheight="16" infinite="0" nextlayerid="5" nextobjectid="17">
  <properties>
   <property name="Scale" type="int" value="1"/>
  </properties>
@@ -116,13 +116,16 @@
 </data>
  </layer>
  <objectgroup id="4" name="Слой объектов 1">
-  <object id="9" x="36.6631" y="286.929">
+  <object id="9" name="spawnpoint" x="74.9826" y="349.571">
    <point/>
   </object>
-  <object id="11" x="362.044" y="275.37">
+  <object id="11" name="spawnpoint" x="398.513" y="347.911">
    <point/>
   </object>
-  <object id="12" x="277.176" y="551.643">
+  <object id="13" name="WeaponPistol" x="239.789" y="364.785">
+   <point/>
+  </object>
+  <object id="15" name="WeaponShotgun" x="238.669" y="140.525">
    <point/>
   </object>
  </objectgroup>

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import socket
 
 import pygame
@@ -22,7 +24,8 @@ clock = pygame.time.Clock()
 
 from event_codes import *
 from level import Level, Tile
-from player import Player, Bullet
+from player import Player
+from weapon import Weapon, Bullet
 from screens import Menu, ConnectToServerMenu, LoadingScreen, MessageScreen, StartServerMenu
 
 
@@ -70,27 +73,48 @@ class Camera:
 
 
 class Game:
-    def __init__(self, clock, level_name="", player_position=(0, 0)):
-        self.clock: pygame.time.Clock = clock
+    def __init__(self, clock: pygame.time.Clock, game_manager: GameManager, level_name="", player_position=(0, 0)):
+        self.clock = clock
+        self.game_manager = game_manager
         self.offset_x, self.offset_y = 0, 0
 
         self.level = Level(level_name)
-        self.player = Player(player_position, 1, "New_Knight")
+        self.player = Player((0, 0), 1, "New_Knight")
+        self.player.set_right(player_position[0] + self.player.width // 2)
+        self.player.set_top(player_position[1])
         self.players: dict[int, Player] = {}
-        self.bullets = {}
+        self.bullets: dict[int, Bullet] = {}
+        self.weapons: dict[int, Weapon] = {}
 
         self.camera = Camera(self.player)
 
     def update(self):
         fps = self.clock.get_fps()
         time_delta = 1 / max(1, fps)
-
         for bullet_id, bullet in self.bullets.items():
             bullet.update(time_delta)
+
+        if not self.game_manager.packet_received:
+            for player_id, player in self.players.items():
+                if player_id == self.game_manager.network.id:
+                    continue
+                player.loop(time_delta)
+                self.collision_y(player)
 
         self.player.loop(time_delta)
         self.input_handle(time_delta)
         self.camera.update(time_delta)
+
+        for weapon_id, weapon in self.weapons.items():
+            weapon.update_sprite(time_delta)
+
+        for player_id, player in self.players.items():
+            if player_id == self.game_manager.network.id:
+                continue
+            if player.weapon.name == 'WeaponNone':
+                player.weapon.update_sprite(time_delta)
+
+
 
     def draw(self, screen):
         image = pygame.Surface((WIDTH // self.level.scale, HEIGHT // self.level.scale))
@@ -104,6 +128,10 @@ class Game:
             player.draw(image, self.offset_x, self.offset_y)
         self.player.draw(image, self.offset_x, self.offset_y)
 
+        for weapon_id, weapon in self.weapons.items():
+            if not weapon.attached:
+                weapon.draw(image, self.offset_x, self.offset_y)
+
         for bullet_id, bullet in self.bullets.items():
             bullet.draw(image, self.offset_x, self.offset_y)
 
@@ -112,9 +140,9 @@ class Game:
 
     def input_handle(self, time_delta):
         keys = pygame.key.get_pressed()
-        collide_vertical = self.collision_y()
-        collide_left: list[Tile] = self.collision_x(min(-1, -int(self.player.v * time_delta)) - 1)
-        collide_right: list[Tile] = self.collision_x(max(1, int(self.player.v * time_delta)) + 1)
+        collide_vertical = self.collision_y(self.player)
+        collide_left: list[Tile] = self.collision_x(self.player, min(-1, -int(self.player.v * time_delta)) - 1)
+        collide_right: list[Tile] = self.collision_x(self.player, max(1, int(self.player.v * time_delta)) + 1)
 
         self.player.vx = 0
         if keys[pygame.K_a] and not collide_left:
@@ -144,14 +172,17 @@ class Game:
             self.level.radius -= 4
             pass
 
-    def collision_x(self, dx):
-        self.player.move(dx, 0)
-        collided = self.level.collide_sprite(self.player)
-        self.player.move(-dx, 0)
+        if keys[pygame.K_RETURN]:
+            self.game_manager.shoot_bullet()
+
+    def collision_x(self, player, dx):
+        player.move(dx, 0)
+        collided = self.level.collide_sprite(player)
+        player.move(-dx, 0)
         return collided
 
-    def collision_y(self):
-        collided = self.level.collide_sprite(self.player)
+    def collision_y(self, player):
+        collided = self.level.collide_sprite(player)
         if not collided:
             return collided
 
@@ -161,12 +192,12 @@ class Game:
             lowest_point = max(lowest_point, tile.rect.bottom)
             highest_point = min(highest_point, tile.rect.top)
 
-        if self.player.vy > 0:
-            self.player.set_bottom(highest_point)
-            self.player.touch_down()
-        elif self.player.vy < 0:
-            self.player.set_top(lowest_point)
-            self.player.touch_ceil()
+        if player.vy > 0:
+            player.set_bottom(highest_point)
+            player.touch_down()
+        elif player.vy < 0:
+            player.set_top(lowest_point)
+            player.touch_ceil()
 
         return collided
 
@@ -177,7 +208,10 @@ class Game:
 class GameManager:
     from network import DataPacket
 
+    game_id = 0
+
     def __init__(self):
+        self.packet_received = True
         self.player_flags = set()
         self.network: Network = None
         self.game: Game = None
@@ -196,12 +230,14 @@ class GameManager:
                 break
             data_bytes += byte
         data_packet = self.DataPacket.from_bytes(data_bytes)
+        game_id = data_packet.headers['game_id']
 
         if data_packet.data_type == self.DataPacket.AUTH:
             self.network.id = data_packet.data['id']
 
         if data_packet.data_type == self.DataPacket.GAME_INFO:
-            self.game = Game(clock, data_packet['level_name'], data_packet['position'])
+            GameManager.game_id = game_id
+            self.game = Game(clock, self, data_packet['level_name'], data_packet['position'])
             self.send_initial_info()
             self.game_started = True
 
@@ -220,10 +256,15 @@ class GameManager:
                 if str(player_id) not in data_packet.data.keys():
                     self.game.players.pop(player_id)
 
-        if data_packet.data_type == self.DataPacket.NEW_BULLET_FROM_SERVER:
-            bullet_id, bullet = data_packet.data
+        if data_packet.data_type == self.DataPacket.NEW_SHOT_FROM_SERVER:
+            client_id, bullet_id, bullet = data_packet.data
+
             bullet_id = int(bullet_id)
-            self.game.bullets[bullet_id] = Bullet((bullet[0], bullet[1]), (bullet[2], bullet[3]))
+            self.game.bullets[bullet_id] = Bullet((bullet[0], bullet[1]), (bullet[2], bullet[3]), bullet[4])
+            if client_id == self.network.id:
+                self.game.player.weapon.shoot()
+            else:
+                self.game.players[client_id].weapon.shoot()
 
         if data_packet.data_type == self.DataPacket.DELETE_BULLET_FROM_SERVER:
             bullet_id = data_packet.data
@@ -234,47 +275,101 @@ class GameManager:
         if data_packet.data_type == self.DataPacket.HEALTH_POINTS:
             self.game.player.hp = data_packet.data
 
+        if data_packet.data_type == self.DataPacket.NEW_WEAPON_FROM_SERVER:
+            weapon_id = data_packet['weapon_id']
+            weapon_name, weapon_x, weapon_y, weapon_ammo = data_packet['weapon_data']
+            self.game.weapons[weapon_id] = Weapon(name=weapon_name, ammo=weapon_ammo, pos=(weapon_x, weapon_y))
+
+        if data_packet.data_type == self.DataPacket.CLIENT_PICKED_WEAPON:
+            client_id = data_packet['owner_id']
+            weapon_id = data_packet['weapon_id']
+
+            if client_id == self.network.id:
+                self.game.player.attach_weapon(self.game.weapons[weapon_id])
+            else:
+                self.game.players[client_id].attach_weapon(self.game.weapons[weapon_id])
+
+        if data_packet.data_type == self.DataPacket.CLIENT_DROPPED_WEAPON:
+            client_id = data_packet['owner_id']
+            weapon_id = data_packet['weapon_id']
+            weapon_position = data_packet['weapon_position']
+            weapon_direction = data_packet['weapon_direction']
+
+            if client_id == self.network.id:
+                self.game.player.attach_weapon(Weapon('WeaponNone', owner=self.game.player))
+            else:
+                self.game.players[client_id].attach_weapon(Weapon('WeaponNone', owner=self.game.players[client_id]))
+            self.game.weapons[weapon_id].x, self.game.weapons[weapon_id].y = weapon_position
+            self.game.weapons[weapon_id].direction = weapon_direction
+
     def handle_game_objects_collision(self):
         for object in self.game.level.objects['rectangles']:
             if pygame.rect.Rect.colliderect(object.rect, self.game.player.rect):
                 if self.DataPacket.FLAG_READY not in self.player_flags:
                     self.player_flags.add(self.DataPacket.FLAG_READY)
-                    response_data = {'id': self.network.id, 'data': self.DataPacket.FLAG_READY}
-                    response = self.DataPacket(self.DataPacket.ADD_PLAYER_FLAG, response_data)
-                    self.network.send(response)
+                    response_data = {'data': self.DataPacket.FLAG_READY}
+                    response = self.DataPacket(self.DataPacket.ADD_PLAYER_FLAG, response_data, )
+                    self.send(response)
             else:
                 if self.DataPacket.FLAG_READY in self.player_flags:
                     self.player_flags.remove(self.DataPacket.FLAG_READY)
-                    response_data = {'id': self.network.id, 'data': self.DataPacket.FLAG_READY}
+                    response_data = {'data': self.DataPacket.FLAG_READY}
                     response = self.DataPacket(self.DataPacket.REMOVE_PLAYER_FLAG, response_data)
-                    self.network.send(response)
+                    self.send(response)
 
     def shoot_bullet(self):
         if self.game.player.hp <= 0:
             return
-        speed = 1200
-        bullet = Bullet(self.game.player.get_center_position(),
-                        (speed if (self.game.player.direction == 'right') else -speed, 0))
+        if self.game.player.weapon.name == "WeaponNone":
+            return
+        bullet = self.game.player.weapon.shoot()
+        if bullet is None:
+            return
+
         bullet_data = {'id': self.network.id, 'data': bullet.encode()}
-        response = self.DataPacket(self.DataPacket.NEW_BULLET_FROM_CLIENT, bullet_data)
-        self.network.send(response)
+        response = self.DataPacket(self.DataPacket.NEW_SHOT_FROM_CLIENT, bullet_data)
+        self.send(response)
+
+    def pick_up_weapon(self):
+        response = self.DataPacket(self.DataPacket.CLIENT_PICK_WEAPON_REQUEST)
+        self.send(response)
+
+    def drop_weapon(self):
+        if self.game.player.weapon.name == 'WeaponNone':
+            return
+
+        dropped_weapon_id = 0
+        for weapon_id, weapon in self.game.weapons.items():
+            if weapon == self.game.player.weapon:
+                dropped_weapon_id = weapon_id
+                break
+        response = self.DataPacket(self.DataPacket.CLIENT_DROPPED_WEAPON,
+                                   {'weapon_id': dropped_weapon_id,
+                                    'weapon_direction': self.game.player.weapon.direction,
+                                    'weapon_position': (self.game.player.weapon.get_position()),
+                                    'weapon_ammo': self.game.player.weapon.ammo})
+        self.send(response)
 
     def send_initial_info(self):
-        player_data = {'id': self.network.id, 'data': self.game.player.initial_info()}
+        player_data = {'data': self.game.player.initial_info()}
         response = self.DataPacket(self.DataPacket.INITIAL_INFO, player_data)
-        self.network.send(response)
+        self.send(response)
 
     def send_player_data(self):
-        player_data = {'id': self.network.id, 'data': self.game.player.encode()}
+        player_data = {'data': self.game.player.encode()}
         response = self.DataPacket(self.DataPacket.CLIENT_PLAYER_INFO, player_data)
-        self.network.send(response)
+        self.send(response)
+
+    def send(self, data_packet):
+        data_packet.headers['id'] = self.network.id
+        data_packet.headers['game_id'] = self.game_id
+        self.network.send(data_packet)
 
     def receive(self):
-        self.network.receive()
+        return self.network.receive()
 
     def draw(self, screen: pygame.Surface):
-
-        self.receive()
+        self.packet_received = self.receive()
         if self.game is None:
             LoadingScreen().draw(screen)
         else:
@@ -309,9 +404,12 @@ def main(screen):
                 break
 
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RETURN:
-                    if game_manager.game_started:
-                        game_manager.shoot_bullet()
+                if game_manager.game_started:
+                    if event.key == pygame.K_j:
+                        if game_manager.game.player.weapon.name == 'WeaponNone':
+                            game_manager.pick_up_weapon()
+                        else:
+                            game_manager.drop_weapon()
 
             if type(current_screen) == ConnectToServerMenu:
                 current_screen.event_handle(event)
@@ -343,7 +441,6 @@ def main(screen):
         pygame.display.flip()
 
     pygame.quit()
-    quit(0)
 
 
 if __name__ == "__main__":

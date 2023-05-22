@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import asyncio.streams
 import json
 import selectors
 import socket
@@ -13,23 +16,28 @@ class DataPacket:
     CLIENT_PLAYER_INFO = 7
     ADD_PLAYER_FLAG = 8
     REMOVE_PLAYER_FLAG = 9
-    NEW_BULLET_FROM_CLIENT = 10
-    NEW_BULLET_FROM_SERVER = 11
+    NEW_SHOT_FROM_CLIENT = 10
+    NEW_SHOT_FROM_SERVER = 11
     DELETE_BULLET_FROM_SERVER = 12
     HEALTH_POINTS = 13
+    NEW_WEAPON_FROM_SERVER = 14
+    CLIENT_PICKED_WEAPON = 15
+    CLIENT_DROPPED_WEAPON = 16
+    CLIENT_PICK_WEAPON_REQUEST = 17
 
     FLAG_READY = 100
 
-    def __init__(self, data_type, data=None):
+    def __init__(self, data_type, data=None, headers=None):
         self.data_type = data_type
         self.data = dict() if (data is None) else data
+        self.headers = dict() if (headers is None) else headers
 
     @classmethod
-    def from_bytes(cls, packet: bytes):
+    def from_bytes(cls, packet: bytes) -> DataPacket:
         packet = json.loads(packet)
-        return DataPacket(packet['data_type'], packet['data'])
+        return DataPacket(packet['data_type'], packet['data'], packet['headers'])
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key, value) -> None:
         self.data[key] = value
 
     def __getitem__(self, item):
@@ -38,7 +46,8 @@ class DataPacket:
     def encode(self) -> bytes:
         datagram = {
             'data_type': self.data_type,
-            'data': self.data
+            'data': self.data,
+            'headers': self.headers
         }
         return json.dumps(datagram).encode()
 
@@ -69,10 +78,15 @@ class Network:
         self.tcp_client_socket.send(data_packet.encode() + b'\n')
 
     def receive(self):
+        received = False
+
         while True:
             events = self.sel.select(timeout=0)
             if not events:
                 break
+            received = True
             for key, mask in events:
                 callback = key.data
                 callback(key.fileobj, mask)
+
+        return received
