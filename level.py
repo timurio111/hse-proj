@@ -1,7 +1,6 @@
 import os
 import xml.etree.ElementTree as ET
 from fnmatch import fnmatch
-from typing import Protocol
 
 import pygame
 
@@ -57,10 +56,9 @@ def load_map(name: str):
     objects['rectangles'], objects['points'] = [], []
     for objectgroup in map_xml_root.findall('objectgroup'):
         for game_object in objectgroup.findall('object'):
-            object_name = game_object.get('name')
             if game_object.find('point') is not None:
                 x, y = game_object.get('x'), game_object.get('y')
-                objects['points'].append(GameObjectPoint(int(float(x)), int(float(y)), object_name))
+                objects['points'].append(GameObjectPoint(int(float(x)), int(float(y))))
             elif game_object.find('ellipse') is not None:
                 pass
             elif game_object.find('polygon') is not None:
@@ -69,7 +67,7 @@ def load_map(name: str):
                 x, y = game_object.get('x'), game_object.get('y')
                 width, height = game_object.get('width'), game_object.get('height')
                 objects['rectangles'].append(
-                    GameObjectRect(int(float(x)), int(float(y)), int(float(width)), int(float(height)), object_name))
+                    GameObjectRect(int(float(x)), int(float(y)), int(float(width)), int(float(height))))
 
     info = dict()
     info['scale'] = scale
@@ -80,16 +78,11 @@ def load_map(name: str):
     return layers, objects, info
 
 
-class Collidable(Protocol):
-    rect: pygame.Rect
-    mask: pygame.mask.Mask
-
-
 class Level:
     def __init__(self, name: str):
         self.layers, self.objects, self.info = load_map(name)
         self.scale = self.info['scale']
-        self.radius = 500
+        self.radius = 200
 
     def draw(self, screen: pygame.Surface, offset_x, offset_y, pos_x, pos_y):
         for layer in self.layers:
@@ -97,7 +90,7 @@ class Level:
                 if tile.distance(pos_x, pos_y) < self.radius and tile.visible(offset_x, offset_y, self.scale):
                     tile.draw(screen, offset_x, offset_y, self.scale)
 
-    def collide_sprite(self, sprite: Collidable):
+    def collide_sprite(self, sprite: pygame.sprite.Sprite):
         collided = []
         rect = sprite.rect
         for layer in self.layers:
@@ -138,14 +131,12 @@ class Level:
 
 
 class GameObjectRect:
-    def __init__(self, x, y, width, height, name):
-        self.name = name
+    def __init__(self, x, y, width, height):
         self.rect = pygame.Rect((x, y), (width, height))
 
 
 class GameObjectPoint:
-    def __init__(self, x, y, name):
-        self.name = name
+    def __init__(self, x, y):
         self.x, self.y = x, y
 
 
