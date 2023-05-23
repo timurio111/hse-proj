@@ -266,6 +266,9 @@ async def change_level(level_name):
 async def handle_packet(data_packet: DataPacket, writer: asyncio.StreamWriter):
     client_id: int = data_packet.headers['id']
 
+    if client_id == -1:
+        return
+
     if data_packet.headers['game_id'] != game_state.game_id:
         return
 
