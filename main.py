@@ -79,7 +79,7 @@ class Game:
         self.offset_x, self.offset_y = 0, 0
 
         self.level = Level(level_name)
-        self.player = Player((0, 0), 1, "New_Knight")
+        self.player = Player((0, 0), 1, "Knight")
         self.player.set_right(player_position[0] + self.player.width // 2)
         self.player.set_top(player_position[1])
         self.players: dict[int, Player] = {}
@@ -251,7 +251,7 @@ class GameManager:
                     continue
 
                 if player_id not in self.game.players.keys():
-                    self.game.players[player_id] = Player((0, 0), 1, "New_Knight")
+                    self.game.players[player_id] = Player((0, 0), 1, "Knight")
 
                 self.game.players[player_id].apply(data)
 

@@ -3,7 +3,7 @@
  <properties>
   <property name="Scale" type="int" value="1"/>
  </properties>
- <tileset firstgid="1" source="../testmap/testset.tsx"/>
+ <tileset firstgid="1" source="./testset.tsx"/>
  <layer id="3" name="Фон" width="30" height="30">
   <properties>
    <property name="Collision" type="bool" value="false"/>
