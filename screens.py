@@ -44,10 +44,10 @@ class ConnectToServerMenu:
                                   pos=(10, 10),
                                   text="Back",
                                   event=pygame.event.Event(OPEN_MAIN_MENU_EVENT))
-        self.text_input_address = TextInput(size=(WIDTH // 1.1, 40),
+        self.text_input_address = TextInput(size=(WIDTH // 1.1, 25),
                                             pos=((WIDTH - WIDTH // 1.1) // 2, HEIGHT // 2),
                                             hint="server address",
-                                            text="127.0.0.1:5555",
+                                            text="",
                                             font='data/fonts/menu_font.ttf')
 
         self.button_start_game = Button(size=(WIDTH // 5, 40),
@@ -73,10 +73,10 @@ class StartServerMenu:
                                   pos=(10, 10),
                                   text="Back",
                                   event=pygame.event.Event(OPEN_MAIN_MENU_EVENT))
-        self.text_input_address = TextInput(size=(WIDTH // 1.1, 40),
+        self.text_input_address = TextInput(size=(WIDTH // 1.1, 25),
                                             pos=((WIDTH - WIDTH // 1.1) // 2, HEIGHT // 2),
                                             hint="server address",
-                                            text="127.0.0.1:5555",
+                                            text="",
                                             font='data/fonts/menu_font.ttf')
 
         self.button_start_game = Button(size=(WIDTH // 5, 40),
