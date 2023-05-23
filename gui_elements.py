@@ -1,4 +1,5 @@
 import pygame
+import pyperclip
 
 
 class TextInput:
@@ -31,9 +32,9 @@ class TextInput:
         if not self.active:
             return
         if event.type == pygame.KEYDOWN:
-            if (event.key == pygame.K_v) and (event.mod & pygame.KMOD_CTRL):
-                print('Clipboard:', pygame.scrap.get(pygame.SCRAP_TEXT))
-            if event.key == pygame.K_BACKSPACE:
+            if (event.key == pygame.K_v) and ((event.mod & pygame.KMOD_META) or (event.mod & pygame.KMOD_CTRL)):
+                self.text += pyperclip.paste()
+            elif event.key == pygame.K_BACKSPACE:
                 self.text = self.text[:-1]
             else:
                 self.text += event.unicode
