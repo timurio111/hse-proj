@@ -247,6 +247,7 @@ class GameManager:
         if data_packet.data_type == self.DataPacket.GAME_INFO:
             GameManager.game_id = game_id
             self.game = Game(clock, self, data_packet['level_name'], data_packet['position'])
+            self.game.player.set_color(data_packet['color'])
             self.send_initial_info()
             self.game_started = True
 
@@ -257,7 +258,8 @@ class GameManager:
                     continue
 
                 if player_id not in self.game.players.keys():
-                    self.game.players[player_id] = Player((0, 0), 1, "Knight")
+                    color = data[9]
+                    self.game.players[player_id] = Player((0, 0), 1, "Knight", color)
 
                 self.game.players[player_id].apply(data)
 

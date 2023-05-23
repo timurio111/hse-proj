@@ -40,9 +40,12 @@ def load_character_sprites(name: str, scale: int) -> (dict[str, list[pygame.surf
 
 
 class Player:
-    def __init__(self, pos, scale, name):
+    def __init__(self, pos, scale, name, color=(255, 255, 255)):
 
         self.sprites, self.ch_data = load_character_sprites(name, scale)
+        self.set_color(color)
+        self.color = color
+
         self.rect: pygame.Rect = pygame.rect.Rect(pos, (
             self.ch_data['RECT_WIDTH'] * scale, self.ch_data['RECT_HEIGHT'] * scale))
 
@@ -77,6 +80,14 @@ class Player:
 
         self.weapon = None
         self.attach_weapon(Weapon('WeaponNone', owner=self))
+
+    def set_color(self, color):
+        self.color = color
+        for sprites_list in self.sprites.values():
+            for sprite in sprites_list:
+                colorImage = pygame.Surface(sprite.get_size()).convert_alpha()
+                colorImage.fill(color)
+                sprite.blit(colorImage, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
 
     def get_position(self):
         x = self.x + self.ch_data['RECT_WIDTH'] // 2
@@ -201,7 +212,7 @@ class Player:
 
     def initial_info(self):
         return [self.rect.x, self.rect.y, self.status, self.direction, self.sprite_animation_counter,
-                self.hp, self.ch_data]
+                self.hp, self.ch_data, self.color]
 
     def apply(self, data):
         self.rect.x = data[0]
@@ -218,5 +229,3 @@ class Player:
         self.vx = data[6]
         self.vy = data[7]
         self.off_ground_counter = data[8]
-
-

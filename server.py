@@ -5,12 +5,14 @@ import time
 
 import pygame
 
+from colors import color_generator
 from level import Level, GameObjectPoint
 from network import DataPacket
 from weapon import Weapon
 
 DEBUG = True
 TICK_RATE = 60
+POSITIONS_SEND_RATE = 120
 
 server = "127.0.0.1"
 tcp_port = 5555
@@ -28,7 +30,7 @@ lock = asyncio.Lock()
 
 class ServerPlayer:
     def __init__(self, player_id: int, x: int, y: int, status: str, direction: str, sprite_animation_counter: int,
-                 hp: int, ch_data: dict):
+                 hp: int, ch_data: dict, color: list):
         self.id: int = player_id
         self.x = x
         self.y = y
@@ -44,6 +46,7 @@ class ServerPlayer:
         self.sprite_offset_y: int = self.ch_data['RECT_HEIGHT'] - self.ch_data['CHARACTER_HEIGHT']
         self.sprite_rect = pygame.Rect((self.x + self.sprite_offset_x, self.y + self.sprite_offset_y),
                                        (ch_data['CHARACTER_WIDTH'], ch_data['CHARACTER_HEIGHT']))
+        self.color = color
         self.flags: set[int] = set()
 
     @staticmethod
@@ -61,7 +64,7 @@ class ServerPlayer:
 
     def encode(self) -> list:
         return [self.x, self.y, self.status, self.direction, self.sprite_animation_counter, self.hp,
-                self.vx, self.vy, self.off_ground_counter]
+                self.vx, self.vy, self.off_ground_counter, self.color]
 
     def __repr__(self):
         return str((self.x, self.y, self.hp))
@@ -199,7 +202,7 @@ async def accept_connection(reader: asyncio.StreamReader, writer: asyncio.Stream
 
     print(f"New connection. Id={client_id}")
 
-    game_data = {'level_name': 'lobby', 'position': game_state.get_spawn_point()}
+    game_data = {'level_name': 'lobby', 'position': game_state.get_spawn_point(), 'color': color_generator.__next__()}
     response = DataPacket(DataPacket.GAME_INFO, game_data)
     await send(client_id, response)
 
@@ -265,7 +268,8 @@ async def change_level(level_name):
         game_state.players[player_id].hp = 100
         spawn_pos = game_state.get_spawn_point()
 
-        game_data = {'level_name': game_state.level_name, 'position': spawn_pos}
+        player_color = game_state.players[player_id].color
+        game_data = {'level_name': game_state.level_name, 'position': spawn_pos, 'color': player_color}
         game_state.players[player_id].x, game_state.players[player_id].y = spawn_pos
 
         response = DataPacket(DataPacket.GAME_INFO, game_data)
@@ -365,9 +369,6 @@ async def update(time_delta):
         game_state.game_started = False
         return
 
-    if game_state.game_ended:
-        return
-
     # Все игроки готовы начать игру (флаг устанавливается в лобби)
     if all([DataPacket.FLAG_READY in player.flags for player in game_state.players.values()]) \
             and not game_state.game_ended and len(game_state.players) > 1:
@@ -427,17 +428,21 @@ async def update(time_delta):
                 await delete_bullet(bullet_id)
 
 
-async def update_loop(protocol):
+async def update_loop():
     last_tick = time.time()
     while True:
         time_delta = time.time() - last_tick
         last_tick = time.time()
 
         await update(time_delta)
+        await asyncio.sleep(1 / TICK_RATE)
+
+
+async def send_positions_loop(protocol):
+    while True:
         for client_id in id_to_udp_address.keys():
             await send_players_data(client_id, protocol)
-
-        await asyncio.sleep(1 / TICK_RATE)
+        await asyncio.sleep(1 / POSITIONS_SEND_RATE)
 
 
 class ServerProtocol(asyncio.DatagramProtocol):
@@ -469,9 +474,11 @@ async def main():
 
     print("Server is up waiting...")
 
-    loop_task = asyncio.create_task(update_loop(protocol))
+    loop_task = asyncio.create_task(update_loop())
+    send_positions_task = asyncio.create_task(send_positions_loop(protocol))
 
     await loop_task
+    await send_positions_task
     async with tcp_server:
         await tcp_server.serve_forever()
 
