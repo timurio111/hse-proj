@@ -1,5 +1,7 @@
 import os
 
+import pygame.event
+
 from config import WIDTH, HEIGHT
 from event_codes import *
 from gui_elements import Button, TextInput
@@ -56,6 +58,12 @@ class ConnectToServerMenu:
                                         event=pygame.event.Event(CONNECT_TO_SERVER_EVENT, ))
 
     def event_handle(self, event):
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+            connect_event = pygame.event.Event(CONNECT_TO_SERVER_EVENT)
+            connect_event.dict['input'] = self.text_input_address.text
+            pygame.event.post(connect_event)
+
+            return
         self.text_input_address.event_handle(event)
         self.button_start_game.event.dict['input'] = self.text_input_address.text
 
