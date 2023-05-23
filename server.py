@@ -136,6 +136,7 @@ class GameState:
         self.change_level(self.level_name)
 
         self.game_ended = False
+        self.game_started = False
 
     def change_level(self, level_name) -> None:
         GameState.game_id += 1
@@ -174,6 +175,12 @@ async def accept_connection(reader: asyncio.StreamReader, writer: asyncio.Stream
 
     client_socket_to_id[(reader, writer)] = current_id
     current_id += 1
+
+    if game_state.game_started:
+        response = DataPacket(DataPacket.GAME_ALREADY_STARTED)
+        await send(writer, response)
+        await disconnect(reader, writer)
+        return
 
     auth_data = {'id': client_socket_to_id[(reader, writer)]}
     response = DataPacket(DataPacket.AUTH, auth_data)
@@ -338,6 +345,7 @@ async def update(time_delta):
     if not game_state.players:
         if game_state.level_name != 'lobby':
             await change_level('lobby')
+        game_state.game_started = False
         return
 
     if game_state.game_ended:
@@ -347,6 +355,7 @@ async def update(time_delta):
     if all([DataPacket.FLAG_READY in player.flags for player in game_state.players.values()]) \
             and not game_state.game_ended and len(game_state.players) > 1:
         game_state.game_ended = True
+        game_state.game_started = True
         await asyncio.sleep(1)
         await change_level('firstmap')
         return

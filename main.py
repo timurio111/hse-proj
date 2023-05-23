@@ -114,8 +114,6 @@ class Game:
             if player.weapon.name == 'WeaponNone':
                 player.weapon.update_sprite(time_delta)
 
-
-
     def draw(self, screen):
         image = pygame.Surface((WIDTH // self.level.scale, HEIGHT // self.level.scale))
 
@@ -226,6 +224,8 @@ class GameManager:
         data_bytes = b''
         while True:
             byte = client_socket.recv(1)
+            if byte == b'':
+                raise Exception('Disconnected')
             if byte == b'\n':
                 break
             data_bytes += byte
@@ -234,6 +234,9 @@ class GameManager:
 
         if data_packet.data_type == self.DataPacket.AUTH:
             self.network.id = data_packet.data['id']
+
+        if data_packet.data_type == self.DataPacket.GAME_ALREADY_STARTED:
+            raise Exception('Game is already started')
 
         if data_packet.data_type == self.DataPacket.GAME_INFO:
             GameManager.game_id = game_id
@@ -384,7 +387,6 @@ def validate_address(user_input):
     if ':' not in user_input:
         raise ValueError('Not a valid server address')
     server, port = user_input.split(':')
-    socket.inet_aton(server)
     try:
         port = int(port)
     except Exception:
@@ -438,7 +440,10 @@ def main(screen):
             if event.type == START_SERVER_MENU_EVENT:
                 current_screen = StartServerMenu()
 
-        current_screen.draw(screen)
+        try:
+            current_screen.draw(screen)
+        except Exception as e:
+            current_screen = MessageScreen(str(e), pygame.event.Event(OPEN_MAIN_MENU_EVENT))
         pygame.display.set_caption(f"{int(clock.get_fps())} FPS")
         pygame.display.flip()
 

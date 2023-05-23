@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio.streams
 import json
 import selectors
 import socket
@@ -24,6 +23,7 @@ class DataPacket:
     CLIENT_PICKED_WEAPON = 15
     CLIENT_DROPPED_WEAPON = 16
     CLIENT_PICK_WEAPON_REQUEST = 17
+    GAME_ALREADY_STARTED = 18
 
     FLAG_READY = 100
 
