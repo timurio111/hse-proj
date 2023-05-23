@@ -219,8 +219,9 @@ class GameManager:
         self.network = Network(server, port, self.callback)
         self.network.authorize()
 
-    def callback(self, client_socket: socket.socket, mask):
-
+    def read(self, client_socket: socket.socket):
+        if client_socket.type == socket.SOCK_DGRAM:
+            return client_socket.recv(1024)
         data_bytes = b''
         while True:
             byte = client_socket.recv(1)
@@ -229,6 +230,11 @@ class GameManager:
             if byte == b'\n':
                 break
             data_bytes += byte
+        return data_bytes
+
+    def callback(self, client_socket: socket.socket, mask):
+
+        data_bytes = self.read(client_socket)
         data_packet = self.DataPacket.from_bytes(data_bytes)
         game_id = data_packet.headers['game_id']
 
@@ -368,7 +374,10 @@ class GameManager:
     def send(self, data_packet):
         data_packet.headers['id'] = self.network.id
         data_packet.headers['game_id'] = self.game_id
-        self.network.send(data_packet)
+        if data_packet.data_type == self.DataPacket.CLIENT_PLAYER_INFO:
+            self.network.send_udp(data_packet)
+        else:
+            self.network.send_tcp(data_packet)
 
     def receive(self):
         return self.network.receive()

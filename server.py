@@ -14,8 +14,13 @@ TICK_RATE = 60
 
 server = "127.0.0.1"
 tcp_port = 5555
+udp_port = 5556
 
 current_id = 0
+id_to_stream: dict[int, tuple[asyncio.StreamReader, asyncio.StreamWriter]] = {}
+id_to_address: dict[int, tuple[str, int]] = {}
+address_to_id: dict[tuple[str, int], int] = {}
+id_to_udp_address: dict[int, tuple[str, int]] = {}
 client_socket_to_id: dict[tuple[asyncio.StreamReader, asyncio.StreamWriter], int] = {}
 
 lock = asyncio.Lock()
@@ -171,26 +176,32 @@ game_state = GameState()
 
 
 async def accept_connection(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-    global current_id, client_socket_to_id
+    global current_id, client_socket_to_id, id_to_stream
 
+    client_id = current_id
+    client_address = writer.get_extra_info('peername')
+
+    id_to_stream[client_id] = (reader, writer)
+    id_to_address[client_id] = client_address
+    address_to_id[client_address] = client_id
     client_socket_to_id[(reader, writer)] = current_id
     current_id += 1
 
     if game_state.game_started:
         response = DataPacket(DataPacket.GAME_ALREADY_STARTED)
-        await send(writer, response)
-        await disconnect(reader, writer)
+        await send(client_id, response)
+        await disconnect(client_id)
         return
 
-    auth_data = {'id': client_socket_to_id[(reader, writer)]}
+    auth_data = {'id': client_id}
     response = DataPacket(DataPacket.AUTH, auth_data)
-    await send(writer, response)
+    await send(client_id, response)
 
-    print(f"New connection. Id={client_socket_to_id[(reader, writer)]}")
+    print(f"New connection. Id={client_id}")
 
     game_data = {'level_name': 'lobby', 'position': game_state.get_spawn_point()}
     response = DataPacket(DataPacket.GAME_INFO, game_data)
-    await send(writer, response)
+    await send(client_id, response)
 
     while True:
         try:
@@ -201,17 +212,23 @@ async def accept_connection(reader: asyncio.StreamReader, writer: asyncio.Stream
         if data == b'':
             break
         data_packet = DataPacket.from_bytes(data)
-        await handle_packet(data_packet, writer)
+        await handle_packet(data_packet)
 
-    await disconnect(reader, writer)
+    await disconnect(client_id)
 
 
-async def disconnect(reader, writer):
+async def disconnect(client_id: int):
+    reader, writer = id_to_stream[client_id]
     client_id = client_socket_to_id[(reader, writer)]
+    client_address = id_to_address[client_id]
 
     if client_id in game_state.players.keys():
         game_state.players.pop(client_id)
 
+    id_to_stream.pop(client_id)
+    id_to_address.pop(client_id)
+    id_to_udp_address.pop(client_id)
+    address_to_id.pop(client_address)
     client_socket_to_id.pop((reader, writer))
     writer.close()
     await writer.wait_closed()
@@ -222,7 +239,7 @@ async def read(reader: asyncio.StreamReader) -> bytes:
     return await reader.readline()
 
 
-async def send_players_data(writer: asyncio.StreamWriter):
+async def send_players_data(client_id: int, protocol):
     players_data = dict()
     for player_id in game_state.players.keys():
         if GameState.STATUS_PLAYING not in game_state.players[player_id].flags:
@@ -230,10 +247,11 @@ async def send_players_data(writer: asyncio.StreamWriter):
         players_data[player_id] = game_state.players[player_id].encode()
     response = DataPacket(DataPacket.PLAYERS_INFO, players_data)
 
-    await send(writer, response)
+    protocol.send(client_id, response)
 
 
-async def send(writer: asyncio.StreamWriter, data_packet: DataPacket):
+async def send(client_id: int, data_packet: DataPacket):
+    _, writer = id_to_stream[client_id]
     data_packet.headers['game_id'] = game_state.game_id
     writer.write(data_packet.encode() + b'\n')
     await writer.drain()
@@ -243,7 +261,7 @@ async def change_level(level_name):
     game_state.game_ended = False
     game_state.change_level(level_name)
 
-    for (reader, writer), player_id in client_socket_to_id.items():
+    for player_id in id_to_stream.keys():
         game_state.players[player_id].hp = 100
         spawn_pos = game_state.get_spawn_point()
 
@@ -253,17 +271,15 @@ async def change_level(level_name):
         response = DataPacket(DataPacket.GAME_INFO, game_data)
         if GameState.STATUS_PLAYING in game_state.players[player_id].flags:
             game_state.players[player_id].flags.remove(GameState.STATUS_PLAYING)
-        await send(writer, response)
-
-        await send_players_data(writer)
+        await send(player_id, response)
 
         for weapon_id, weapon in game_state.weapons.items():
             weapon_data = {'weapon_id': weapon_id, 'weapon_data': weapon.encode()}
             response = DataPacket(DataPacket.NEW_WEAPON_FROM_SERVER, weapon_data)
-            await send(writer, response)
+            await send(player_id, response)
 
 
-async def handle_packet(data_packet: DataPacket, writer: asyncio.StreamWriter):
+async def handle_packet(data_packet: DataPacket):
     client_id: int = data_packet.headers['id']
 
     if client_id == -1:
@@ -299,8 +315,8 @@ async def handle_packet(data_packet: DataPacket, writer: asyncio.StreamWriter):
         game_state.bullets[bullet_id] = bullet
 
         response = DataPacket(DataPacket.NEW_SHOT_FROM_SERVER, [client_id, bullet_id, bullet_data])
-        for (reader, writer), player_id in client_socket_to_id.items():
-            await send(writer, response)
+        for client_id in id_to_stream.keys():
+            await send(client_id, response)
 
     if data_packet.data_type == DataPacket.CLIENT_PICK_WEAPON_REQUEST:
         closest_weapon_id = None
@@ -320,8 +336,8 @@ async def handle_packet(data_packet: DataPacket, writer: asyncio.StreamWriter):
             game_state.weapons[closest_weapon_id].owner = client_id
             response = DataPacket(DataPacket.CLIENT_PICKED_WEAPON,
                                   {'owner_id': client_id, 'weapon_id': closest_weapon_id})
-            for (reader, writer), player_id in client_socket_to_id.items():
-                await send(writer, response)
+            for client_id in id_to_stream.keys():
+                await send(client_id, response)
 
     if data_packet.data_type == DataPacket.CLIENT_DROPPED_WEAPON:
         weapon_id = data_packet['weapon_id']
@@ -337,10 +353,8 @@ async def handle_packet(data_packet: DataPacket, writer: asyncio.StreamWriter):
                                'weapon_position': weapon_position,
                                'weapon_direction': weapon_direction,
                                'weapon_ammo': weapon_ammo})
-        for (reader, writer), player_id in client_socket_to_id.items():
-            await send(writer, response)
-
-    await send_players_data(writer)
+        for client_id in id_to_stream.keys():
+            await send(client_id, response)
 
 
 async def update(time_delta):
@@ -372,7 +386,7 @@ async def update(time_delta):
         return
 
     # Пробегаемся по все игрокам
-    for (reader, writer), client_id in client_socket_to_id.items():
+    for client_id in id_to_stream.keys():
 
         # Игрок выпал за пределы карты
         if client_id in game_state.players.keys() and game_state.players[client_id].y > 3000:
@@ -380,15 +394,16 @@ async def update(time_delta):
                 continue
             game_state.players[client_id].hp = 0
             data_packet = DataPacket(DataPacket.HEALTH_POINTS, game_state.players[client_id].hp)
-            await send(writer, data_packet)
+            await send(client_id, data_packet)
 
+    # noinspection PyShadowingNames
     async def delete_bullet(bullet_id):  # Рассылает всем пакет, о том, что пуля с id=bullet_id удалена
         if bullet_id not in game_state.bullets.keys():
             return
         game_state.bullets.pop(bullet_id)
-        for (reader, writer), client_id in client_socket_to_id.items():
+        for client_id in id_to_stream.keys():
             data_packet = DataPacket(DataPacket.DELETE_BULLET_FROM_SERVER, bullet_id)
-            await send(writer, data_packet)
+            await send(client_id, data_packet)
 
     for bullet_id in list(game_state.bullets):
         bullet = game_state.bullets[bullet_id]
@@ -399,7 +414,7 @@ async def update(time_delta):
             await delete_bullet(bullet_id)
             continue
 
-        for (reader, writer), client_id in client_socket_to_id.items():
+        for client_id in id_to_stream.keys():
             if game_state.players[client_id].hp <= 0:
                 continue
             if GameState.STATUS_PLAYING not in game_state.players[client_id].flags:
@@ -408,26 +423,53 @@ async def update(time_delta):
             if game_state.players[client_id].sprite_rect.collidepoint(bullet.get_position()):
                 game_state.players[client_id].hp -= bullet.damage
                 data_packet = DataPacket(DataPacket.HEALTH_POINTS, game_state.players[client_id].hp)
-                await send(writer, data_packet)
+                await send(client_id, data_packet)
                 await delete_bullet(bullet_id)
 
 
-async def loop():
+async def update_loop(protocol):
     last_tick = time.time()
     while True:
         time_delta = time.time() - last_tick
         last_tick = time.time()
 
         await update(time_delta)
+        for client_id in id_to_udp_address.keys():
+            await send_players_data(client_id, protocol)
+
         await asyncio.sleep(1 / TICK_RATE)
 
 
+class ServerProtocol(asyncio.DatagramProtocol):
+    def connection_made(self, transport):
+        self.transport = transport
+
+    def datagram_received(self, data, addr):
+        data_packet = DataPacket.from_bytes(data)
+        client_id = data_packet.headers['id']
+        id_to_udp_address[client_id] = addr
+        asyncio.get_running_loop().create_task(self.respond(data_packet))
+
+    async def respond(self, data_packet):
+        await handle_packet(data_packet)
+
+    def send(self, client_id: int, data_packet: DataPacket):
+        data_packet.headers['game_id'] = game_state.game_id
+        self.transport.sendto(data_packet.encode() + b'\n', id_to_udp_address[client_id])
+
+
 async def main():
+    loop = asyncio.get_event_loop()
+
+    transport, protocol = await loop.create_datagram_endpoint(
+        lambda: ServerProtocol(),
+        local_addr=(server, udp_port))
+
     tcp_server = await asyncio.start_server(accept_connection, server, tcp_port)
 
     print("Server is up waiting...")
 
-    loop_task = asyncio.create_task(loop())
+    loop_task = asyncio.create_task(update_loop(protocol))
 
     await loop_task
     async with tcp_server:
@@ -437,4 +479,7 @@ async def main():
 
 
 if __name__ == '__main__':
-    asyncio.run(main(), debug=DEBUG)
+    loop = asyncio.get_event_loop()
+    loop.set_debug(DEBUG)
+    loop.run_until_complete(main())
+    loop.run_forever()
