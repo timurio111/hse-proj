@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import socket
 
 import pygame
@@ -9,6 +10,7 @@ from config import WIDTH, HEIGHT, MAX_FPS, FULLSCREEN
 from network import Network
 
 pygame.init()
+pygame.mixer.init()
 
 if FULLSCREEN:
     config.HEIGHT = pygame.display.Info().current_h
@@ -409,6 +411,8 @@ def main(screen):
     current_screen = Menu()
     game_manager = GameManager()
     run = True
+    pygame.mixer.music.load(os.path.join('data', 'Music', 'menu_theme.mp3'))
+    pygame.mixer.music.play()
     while run:
         clock.tick(MAX_FPS)
         for event in pygame.event.get():
@@ -434,12 +438,17 @@ def main(screen):
             if event.type == START_GAME_EVENT:
                 pass
             if event.type == OPEN_CONNECTION_MENU_EVENT:
+                pygame.mixer.music.load(os.path.join('data', 'Music', 'server_connection_menu_theme.mp3'))
+                pygame.mixer.music.play()
                 current_screen = ConnectToServerMenu()
             if event.type == OPEN_MAIN_MENU_EVENT:
+                pygame.mixer.music.load(os.path.join('data', 'Music', 'menu_theme.mp3'))
+                pygame.mixer.music.play()
                 current_screen = Menu()
             if event.type == CONNECT_TO_SERVER_EVENT:
-
                 try:
+                    pygame.mixer.music.load(os.path.join('data', 'Music', 'in_game_theme.mp3'))
+                    pygame.mixer.music.play()
                     server, port = validate_address(event.dict['input'])
                     current_screen = game_manager
                     game_manager.connect(server, port)
@@ -447,6 +456,8 @@ def main(screen):
                     current_screen = MessageScreen(str(e), pygame.event.Event(OPEN_CONNECTION_MENU_EVENT))
                     print(e)
             if event.type == START_SERVER_MENU_EVENT:
+                pygame.mixer.music.load(os.path.join('data', 'Music', 'server_connection_menu_theme.mp3'))
+                pygame.mixer.music.play()
                 current_screen = StartServerMenu()
 
         try:

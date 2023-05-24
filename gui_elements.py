@@ -1,6 +1,6 @@
 import pygame
 import pyperclip
-
+import os
 
 class TextInput:
     def __init__(self, size, pos, text="", hint="", font=None):
@@ -52,6 +52,8 @@ class TextInput:
 
 
 class Button:
+    is_hover_sound = pygame.mixer.Sound(os.path.join('data', 'Sounds', 'is_hover.mp3'))
+    is_pressed_sound = pygame.mixer.Sound(os.path.join('data', 'Sounds', 'is_pressed.mp3'))
     def __init__(self, size, pos, text="", border_width=2, font=None, event=None):
         self.event = event
 
@@ -71,6 +73,8 @@ class Button:
         self.image_hover = self.__get_image((180, 180, 180))
         self.image_pressed = self.__get_image((150, 150, 150))
         self.rect = pygame.Rect(pos, size)
+
+        self.is_hover_sound_played = False
 
     def __get_image(self, color) -> pygame.Surface:
         frame = pygame.Surface((self.width, self.height))
@@ -101,13 +105,18 @@ class Button:
         mouse_pos = (mouse_pos[0] // scale, mouse_pos[1] // scale)
         if self.rect.collidepoint(mouse_pos):
             self.hover = True
+            if not self.is_hover_sound_played:
+                self.is_hover_sound.play()
+                self.is_hover_sound_played = True
             if pygame.mouse.get_pressed()[0]:
                 self.pressed = True
             else:
                 if self.pressed:
                     if self.event is not None:
+                        self.is_pressed_sound.play()
                         pygame.event.post(self.event)
                 self.pressed = False
         else:
             self.pressed = False
             self.hover = False
+            self.is_hover_sound_played = False
