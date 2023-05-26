@@ -339,7 +339,7 @@ class GameManager:
         if bullet is None:
             return
 
-        bullet_data = {'id': self.network.id, 'data': bullet.encode()}
+        bullet_data = {'data': bullet.encode()}
         response = self.DataPacket(self.DataPacket.NEW_SHOT_FROM_CLIENT, bullet_data)
         self.send(response)
 

@@ -14,7 +14,7 @@ DEBUG = True
 TICK_RATE = 60
 POSITIONS_SEND_RATE = 120
 
-server = "127.0.0.1"
+server = "192.168.137.1"
 tcp_port = 5555
 udp_port = 5556
 
@@ -24,6 +24,30 @@ id_to_udp_address: dict[int, tuple[str, int]] = {}
 client_socket_to_id: dict[tuple[asyncio.StreamReader, asyncio.StreamWriter], int] = {}
 
 lock = asyncio.Lock()
+
+
+class GameStatistics:
+    def __init__(self):
+        self.players_data = {}
+
+    def new_player(self, player_id: int):
+        self.players_data[player_id] = {'kill': 0, 'death': 0, 'win': 0, 'damage': 0}
+
+    def sort_by_balls(self):
+        rating = []
+        for player in self.players_data.keys():
+            rating.append((self.players_data[player]['win'], self.players_data[player]['kill'], -self.players_data[player]['death'], player))
+        rating.sort()
+        return rating
+
+    def __getitem__(self, item):
+        return self.players_data[item]
+
+    def __setitem__(self, key, value):
+        self.players_data[key] = value
+
+
+game_statistics = GameStatistics()
 
 
 class ServerPlayer:
@@ -53,7 +77,7 @@ class ServerPlayer:
 
     def apply(self, data) -> None:
         self.x, self.y, self.status, self.direction, self.sprite_animation_counter, self.hp, \
-            self.vx, self.vy, self.off_ground_counter = data
+        self.vx, self.vy, self.off_ground_counter = data
         self.sprite_rect.x = self.x + self.sprite_offset_x
         self.sprite_rect.y = self.y + self.sprite_offset_y
 
@@ -64,6 +88,18 @@ class ServerPlayer:
         return [self.x, self.y, self.status, self.direction, self.sprite_animation_counter, self.hp,
                 self.vx, self.vy, self.off_ground_counter, self.color]
 
+    def take_damage(self, bullet: ServerBullet):
+        self.hp -= bullet.damage
+        game_statistics[bullet.owner]['damage'] += min(bullet.damage, self.hp)
+        if self.hp <= 0:
+            self.death()
+            game_statistics[bullet.owner]['kill'] += 1
+
+    def death(self):
+        self.hp = 0
+        game_statistics[self.id]['death'] += 1
+        game_state.players_alive.remove(self.id)
+
     def __repr__(self):
         return str((self.x, self.y, self.hp))
 
@@ -71,12 +107,17 @@ class ServerPlayer:
 class ServerBullet:
     bullet_id = 0
 
-    def __init__(self, pos: tuple[int, int], v: tuple[int, int], damage: int):
+    def __init__(self, owner: int, pos: tuple[int, int], v: tuple[int, int], damage: int):
+        self.owner = owner
         self.x, self.y = pos
         self.vx, self.vy = v
         self.damage = damage
         self.current_lifetime_seconds = 0
         self.max_lifetime_seconds = 1
+
+    @staticmethod
+    def from_data(owner: int, data: list):
+        return ServerBullet(owner, *data)
 
     def update(self, timedelta: int) -> None:
         self.current_lifetime_seconds += timedelta
@@ -129,11 +170,13 @@ class GameState:
     STATUS_WAIT = 1
     STATUS_CONNECTED = 2
     STATUS_PLAYING = 3
-
-    game_id = 0
+    MAX_LEVELS = 2
 
     def __init__(self):
+        self.level_id = 0
+
         self.players: dict[int, ServerPlayer] = dict()
+        self.players_alive: set[int] = set()
         self.bullets: dict[int, ServerBullet] = dict()
         self.weapons: dict[int, ServerWeapon] = dict()
 
@@ -147,8 +190,8 @@ class GameState:
         self.game_started = False
 
     def change_level(self, level_name) -> None:
-        GameState.game_id += 1
-
+        self.level_id += 1
+        self.players_alive = set(self.players.keys())
         self.level_name = level_name
         for player_id, player in self.players.items():
             if DataPacket.FLAG_READY in player.flags:
@@ -193,6 +236,7 @@ async def accept_connection(reader: asyncio.StreamReader, writer: asyncio.Stream
         await disconnect(client_id)
         return
 
+    game_statistics.new_player(client_id)
     auth_data = {'id': client_id}
     response = DataPacket(DataPacket.AUTH, auth_data)
     await send(client_id, response)
@@ -223,6 +267,7 @@ async def disconnect(client_id: int):
         client_id = client_socket_to_id[(reader, writer)]
 
         if client_id in game_state.players.keys():
+            game_state.players[client_id].death()
             game_state.players.pop(client_id)
 
         id_to_stream.pop(client_id)
@@ -250,7 +295,7 @@ async def send_players_data(client_id: int, protocol):
 
 async def send(client_id: int, data_packet: DataPacket):
     _, writer = id_to_stream[client_id]
-    data_packet.headers['game_id'] = game_state.game_id
+    data_packet.headers['game_id'] = game_state.level_id
     writer.write(data_packet.encode())
     await writer.drain()
 
@@ -260,7 +305,8 @@ async def change_level(level_name):
         game_state.game_ended = False
         game_state.change_level(level_name)
 
-        for player_id in id_to_stream.keys():
+        for player in game_statistics.sort_by_balls():
+            player_id = player[3]
             game_state.players[player_id].hp = 100
             spawn_pos = game_state.get_spawn_point()
 
@@ -285,13 +331,14 @@ async def handle_packet(data_packet: DataPacket):
     if client_id == -1:
         return
 
-    if data_packet.headers['game_id'] != game_state.game_id:
+    if data_packet.headers['game_id'] != game_state.level_id:
         return
 
     if data_packet.data_type == DataPacket.INITIAL_INFO:
-        data = data_packet['data']
-        game_state.players[client_id] = ServerPlayer.from_player_data(client_id, data)
-        game_state.players[client_id].flags.add(GameState.STATUS_PLAYING)
+        async with lock:
+            data = data_packet['data']
+            game_state.players[client_id] = ServerPlayer.from_player_data(client_id, data)
+            game_state.players[client_id].flags.add(GameState.STATUS_PLAYING)
 
     if data_packet.data_type == DataPacket.CLIENT_PLAYER_INFO:
         if GameState.STATUS_PLAYING in game_state.players[client_id].flags:
@@ -308,7 +355,7 @@ async def handle_packet(data_packet: DataPacket):
 
     if data_packet.data_type == DataPacket.NEW_SHOT_FROM_CLIENT:
         bullet_data = data_packet['data']
-        bullet = ServerBullet(*bullet_data)
+        bullet = ServerBullet.from_data(client_id, bullet_data)
         bullet_id = ServerBullet.bullet_id
         ServerBullet.bullet_id += 1
 
@@ -375,10 +422,13 @@ async def update(time_delta):
         return
 
     # В живых остался только один (не единственный) игрок
-    if len(game_state.players) > 1 and sum([player.hp > 0 for player in game_state.players.values()]) == 1 \
-            and not game_state.game_ended:
+    if len(game_state.players) > 1 and len(game_state.players_alive) == 1 and not game_state.game_ended:
         game_state.game_ended = True
+        game_statistics[game_state.players_alive.pop()]['win'] += 1
         await asyncio.sleep(1)
+        if game_state.level_id == GameState.MAX_LEVELS:
+            await change_level('lastmap')
+            return
         await change_level('firstmap')
         return
 
@@ -389,7 +439,7 @@ async def update(time_delta):
         if client_id in game_state.players.keys() and game_state.players[client_id].y > 3000:
             if game_state.players[client_id].hp == 0:
                 continue
-            game_state.players[client_id].hp = 0
+            game_state.players[client_id].death()
             data_packet = DataPacket(DataPacket.HEALTH_POINTS, game_state.players[client_id].hp)
             await send(client_id, data_packet)
 
@@ -418,7 +468,7 @@ async def update(time_delta):
                 continue
 
             if game_state.players[client_id].sprite_rect.collidepoint(bullet.get_position()):
-                game_state.players[client_id].hp -= bullet.damage
+                game_state.players[client_id].take_damage(bullet)
                 data_packet = DataPacket(DataPacket.HEALTH_POINTS, game_state.players[client_id].hp)
                 await send(client_id, data_packet)
                 await delete_bullet(bullet_id)
@@ -455,7 +505,7 @@ class UdpServerProtocol(asyncio.DatagramProtocol):
         await handle_packet(data_packet)
 
     def send(self, client_id: int, data_packet: DataPacket):
-        data_packet.headers['game_id'] = game_state.game_id
+        data_packet.headers['game_id'] = game_state.level_id
         self.transport.sendto(data_packet.encode(), id_to_udp_address[client_id])
 
 
