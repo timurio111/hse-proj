@@ -227,7 +227,7 @@ class GameManager:
             byte = client_socket.recv(1)
             if byte == b'':
                 raise Exception('Disconnected')
-            if byte == b'\n':
+            if byte == self.DataPacket.delimiter_byte:
                 break
             data_bytes += byte
         return data_bytes
@@ -268,10 +268,10 @@ class GameManager:
                     self.game.players.pop(player_id)
 
         if data_packet.data_type == self.DataPacket.NEW_SHOT_FROM_SERVER:
-            client_id, bullet_id, bullet = data_packet.data
+            client_id, bullet_id, bullet_data = data_packet.data
 
             bullet_id = int(bullet_id)
-            self.game.bullets[bullet_id] = Bullet((bullet[0], bullet[1]), (bullet[2], bullet[3]), bullet[4])
+            self.game.bullets[bullet_id] = Bullet.from_data(bullet_data)
             if client_id == self.network.id:
                 self.game.player.weapon.shoot()
             else:

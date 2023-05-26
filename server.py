@@ -20,8 +20,6 @@ udp_port = 5556
 
 current_id = 0
 id_to_stream: dict[int, tuple[asyncio.StreamReader, asyncio.StreamWriter]] = {}
-id_to_address: dict[int, tuple[str, int]] = {}
-address_to_id: dict[tuple[str, int], int] = {}
 id_to_udp_address: dict[int, tuple[str, int]] = {}
 client_socket_to_id: dict[tuple[asyncio.StreamReader, asyncio.StreamWriter], int] = {}
 
@@ -73,8 +71,10 @@ class ServerPlayer:
 class ServerBullet:
     bullet_id = 0
 
-    def __init__(self, x: int, y: int, vx: int, vy: int, damage: int):
-        self.x, self.y, self.vx, self.vy, self.damage = x, y, vx, vy, damage
+    def __init__(self, pos: tuple[int, int], v: tuple[int, int], damage: int):
+        self.x, self.y = pos
+        self.vx, self.vy = v
+        self.damage = damage
         self.current_lifetime_seconds = 0
         self.max_lifetime_seconds = 1
 
@@ -182,11 +182,8 @@ async def accept_connection(reader: asyncio.StreamReader, writer: asyncio.Stream
     global current_id, client_socket_to_id, id_to_stream
 
     client_id = current_id
-    client_address = writer.get_extra_info('peername')
 
     id_to_stream[client_id] = (reader, writer)
-    id_to_address[client_id] = client_address
-    address_to_id[client_address] = client_id
     client_socket_to_id[(reader, writer)] = current_id
     current_id += 1
 
@@ -221,21 +218,19 @@ async def accept_connection(reader: asyncio.StreamReader, writer: asyncio.Stream
 
 
 async def disconnect(client_id: int):
-    reader, writer = id_to_stream[client_id]
-    client_id = client_socket_to_id[(reader, writer)]
-    client_address = id_to_address[client_id]
+    async with lock:
+        reader, writer = id_to_stream[client_id]
+        client_id = client_socket_to_id[(reader, writer)]
 
-    if client_id in game_state.players.keys():
-        game_state.players.pop(client_id)
+        if client_id in game_state.players.keys():
+            game_state.players.pop(client_id)
 
-    id_to_stream.pop(client_id)
-    id_to_address.pop(client_id)
-    id_to_udp_address.pop(client_id)
-    address_to_id.pop(client_address)
-    client_socket_to_id.pop((reader, writer))
-    writer.close()
-    await writer.wait_closed()
-    print(f'client with id {client_id} disconnected')
+        id_to_stream.pop(client_id)
+        id_to_udp_address.pop(client_id)
+        client_socket_to_id.pop((reader, writer))
+        writer.close()
+        await writer.wait_closed()
+        print(f'client with id {client_id} disconnected')
 
 
 async def read(reader: asyncio.StreamReader) -> bytes:
@@ -256,31 +251,32 @@ async def send_players_data(client_id: int, protocol):
 async def send(client_id: int, data_packet: DataPacket):
     _, writer = id_to_stream[client_id]
     data_packet.headers['game_id'] = game_state.game_id
-    writer.write(data_packet.encode() + b'\n')
+    writer.write(data_packet.encode())
     await writer.drain()
 
 
 async def change_level(level_name):
-    game_state.game_ended = False
-    game_state.change_level(level_name)
+    async with lock:
+        game_state.game_ended = False
+        game_state.change_level(level_name)
 
-    for player_id in id_to_stream.keys():
-        game_state.players[player_id].hp = 100
-        spawn_pos = game_state.get_spawn_point()
+        for player_id in id_to_stream.keys():
+            game_state.players[player_id].hp = 100
+            spawn_pos = game_state.get_spawn_point()
 
-        player_color = game_state.players[player_id].color
-        game_data = {'level_name': game_state.level_name, 'position': spawn_pos, 'color': player_color}
-        game_state.players[player_id].x, game_state.players[player_id].y = spawn_pos
+            player_color = game_state.players[player_id].color
+            game_data = {'level_name': game_state.level_name, 'position': spawn_pos, 'color': player_color}
+            game_state.players[player_id].x, game_state.players[player_id].y = spawn_pos
 
-        response = DataPacket(DataPacket.GAME_INFO, game_data)
-        if GameState.STATUS_PLAYING in game_state.players[player_id].flags:
-            game_state.players[player_id].flags.remove(GameState.STATUS_PLAYING)
-        await send(player_id, response)
-
-        for weapon_id, weapon in game_state.weapons.items():
-            weapon_data = {'weapon_id': weapon_id, 'weapon_data': weapon.encode()}
-            response = DataPacket(DataPacket.NEW_WEAPON_FROM_SERVER, weapon_data)
+            response = DataPacket(DataPacket.GAME_INFO, game_data)
+            if GameState.STATUS_PLAYING in game_state.players[player_id].flags:
+                game_state.players[player_id].flags.remove(GameState.STATUS_PLAYING)
             await send(player_id, response)
+
+            for weapon_id, weapon in game_state.weapons.items():
+                weapon_data = {'weapon_id': weapon_id, 'weapon_data': weapon.encode()}
+                response = DataPacket(DataPacket.NEW_WEAPON_FROM_SERVER, weapon_data)
+                await send(player_id, response)
 
 
 async def handle_packet(data_packet: DataPacket):
@@ -445,7 +441,7 @@ async def send_positions_loop(protocol):
         await asyncio.sleep(1 / POSITIONS_SEND_RATE)
 
 
-class ServerProtocol(asyncio.DatagramProtocol):
+class UdpServerProtocol(asyncio.DatagramProtocol):
     def connection_made(self, transport):
         self.transport = transport
 
@@ -453,21 +449,19 @@ class ServerProtocol(asyncio.DatagramProtocol):
         data_packet = DataPacket.from_bytes(data)
         client_id = data_packet.headers['id']
         id_to_udp_address[client_id] = addr
-        asyncio.get_running_loop().create_task(self.respond(data_packet))
+        asyncio.get_running_loop().create_task(self.handle(data_packet))
 
-    async def respond(self, data_packet):
+    async def handle(self, data_packet):
         await handle_packet(data_packet)
 
     def send(self, client_id: int, data_packet: DataPacket):
         data_packet.headers['game_id'] = game_state.game_id
-        self.transport.sendto(data_packet.encode() + b'\n', id_to_udp_address[client_id])
+        self.transport.sendto(data_packet.encode(), id_to_udp_address[client_id])
 
 
 async def main():
-    loop = asyncio.get_event_loop()
-
     transport, protocol = await loop.create_datagram_endpoint(
-        lambda: ServerProtocol(),
+        lambda: UdpServerProtocol(),
         local_addr=(server, udp_port))
 
     tcp_server = await asyncio.start_server(accept_connection, server, tcp_port)

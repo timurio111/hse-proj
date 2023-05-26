@@ -27,6 +27,8 @@ class DataPacket:
 
     FLAG_READY = 100
 
+    delimiter_byte = b'\n'
+
     def __init__(self, data_type, data=None, headers=None):
         self.data_type = data_type
         self.data = dict() if (data is None) else data
@@ -49,7 +51,7 @@ class DataPacket:
             'data': self.data,
             'headers': self.headers
         }
-        return json.dumps(datagram).encode()
+        return json.dumps(datagram).encode() + DataPacket.delimiter_byte
 
 
 class Network:
@@ -78,14 +80,14 @@ class Network:
         self.tcp_client_socket.close()
 
     def authorize(self):
-        self.tcp_client_socket.settimeout(0.5)
+        self.tcp_client_socket.settimeout(5)
         self.tcp_client_socket.connect(self.tcp_address)
 
     def send_tcp(self, data_packet: DataPacket):
-        self.tcp_client_socket.send(data_packet.encode() + b'\n')
+        self.tcp_client_socket.send(data_packet.encode())
 
     def send_udp(self, data_packet: DataPacket):
-        self.udp_client_socket.sendto(data_packet.encode() + b'\n', self.udp_address)
+        self.udp_client_socket.sendto(data_packet.encode(), self.udp_address)
 
     def receive(self):
         received = False

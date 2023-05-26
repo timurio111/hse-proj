@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 
 import pygame
@@ -179,10 +181,14 @@ class Bullet:
         self.image.fill((255, 255, 255))
 
     def encode(self):
-        return [self.x, self.y, self.vx, self.vy, self.damage]
+        return [(self.x, self.y), (self.vx, self.vy), self.damage]
 
     def apply(self, data):
         self.x, self.y, self.vx, self.vy = data
+
+    @staticmethod
+    def from_data(data: list) -> Bullet:
+        return Bullet(*data)
 
     def update(self, time_delta):
         dx, dy = self.vx * time_delta, self.vy * time_delta

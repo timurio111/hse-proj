@@ -207,11 +207,11 @@ class Player:
         self.weapon.draw(screen, offset_x, offset_y)
 
     def encode(self):
-        return [self.rect.x, self.rect.y, self.status, self.direction, self.sprite_animation_counter,
+        return [self.rect.x, self.rect.y, self.status, self.direction, round(self.sprite_animation_counter, 2),
                 self.hp, self.vx, self.vy, self.off_ground_counter]
 
     def initial_info(self):
-        return [self.rect.x, self.rect.y, self.status, self.direction, self.sprite_animation_counter,
+        return [self.rect.x, self.rect.y, self.status, self.direction, round(self.sprite_animation_counter, 2),
                 self.hp, self.ch_data, self.color]
 
     def apply(self, data):
