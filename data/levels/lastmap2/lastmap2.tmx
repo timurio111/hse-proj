@@ -116,16 +116,10 @@
 </data>
  </layer>
  <objectgroup id="4" name="Слой объектов 1">
-  <object id="17" name="spawnpoint" x="82.4826" y="400.071">
+  <object id="17" name="spawnpoint" x="114.203" y="400.637">
    <point/>
   </object>
-  <object id="18" name="spawnpoint" x="184.5" y="399.5">
-   <point/>
-  </object>
-  <object id="19" name="spawnpoint" x="280.5" y="400">
-   <point/>
-  </object>
-  <object id="20" name="spawnpoint" x="359.5" y="399.5">
+  <object id="20" name="spawnpoint" x="351.57" y="400.066">
    <point/>
   </object>
  </objectgroup>

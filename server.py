@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+import threading
 
 import pygame
 
@@ -14,7 +15,7 @@ DEBUG = True
 TICK_RATE = 60
 POSITIONS_SEND_RATE = 120
 
-server = "192.168.137.1"
+server = "127.0.0.1"
 tcp_port = 5555
 udp_port = 5556
 
@@ -37,7 +38,7 @@ class GameStatistics:
         rating = []
         for player in self.players_data.keys():
             rating.append((self.players_data[player]['win'], self.players_data[player]['kill'], -self.players_data[player]['death'], player))
-        rating.sort()
+        rating.sort(reverse=True)
         return rating
 
     def __getitem__(self, item):
@@ -181,6 +182,7 @@ class GameState:
         self.weapons: dict[int, ServerWeapon] = dict()
 
         self.level_name: str = 'lobby'
+        self.lastlevel: bool = False
         self.level: Level = Level(self.level_name)
         self.spawn_points: list[GameObjectPoint] = []
         self.current_spawn_point: int = 0
@@ -266,8 +268,9 @@ async def disconnect(client_id: int):
         reader, writer = id_to_stream[client_id]
         client_id = client_socket_to_id[(reader, writer)]
 
-        if client_id in game_state.players.keys():
+        if client_id in game_state.players_alive:
             game_state.players[client_id].death()
+        if client_id in game_state.players.keys():
             game_state.players.pop(client_id)
 
         id_to_stream.pop(client_id)
@@ -300,16 +303,37 @@ async def send(client_id: int, data_packet: DataPacket):
     await writer.drain()
 
 
-async def change_level(level_name):
-    async with lock:
-        game_state.game_ended = False
-        game_state.change_level(level_name)
-
+def spawn_players():
+    if game_state.lastlevel:
         for player in game_statistics.sort_by_balls():
             player_id = player[3]
             game_state.players[player_id].hp = 100
             spawn_pos = game_state.get_spawn_point()
+            yield player_id, spawn_pos
+    else:
+        for player_id in game_state.players.keys():
+            game_state.players[player_id].hp = 100
+            spawn_pos = game_state.get_spawn_point()
+            yield player_id, spawn_pos
 
+
+def timer(n_sec):
+    time.sleep(n_sec)
+    for player in game_state.players_alive:
+        game_state.players[player].death()
+
+
+async def end_game(n_players):
+    game_state.lastlevel = True
+    await change_level('lastmap' + str(n_players))
+
+
+async def change_level(level_name):
+    async with lock:
+        game_state.game_ended = False
+        game_state.change_level(level_name)
+        gen_spawn = spawn_players()
+        for player_id, spawn_pos in gen_spawn:
             player_color = game_state.players[player_id].color
             game_data = {'level_name': game_state.level_name, 'position': spawn_pos, 'color': player_color}
             game_state.players[player_id].x, game_state.players[player_id].y = spawn_pos
@@ -323,6 +347,8 @@ async def change_level(level_name):
                 weapon_data = {'weapon_id': weapon_id, 'weapon_data': weapon.encode()}
                 response = DataPacket(DataPacket.NEW_WEAPON_FROM_SERVER, weapon_data)
                 await send(player_id, response)
+    if game_state.lastlevel:
+        threading.Thread(target=timer(10)).start()
 
 
 async def handle_packet(data_packet: DataPacket):
@@ -427,7 +453,8 @@ async def update(time_delta):
         game_statistics[game_state.players_alive.pop()]['win'] += 1
         await asyncio.sleep(1)
         if game_state.level_id == GameState.MAX_LEVELS:
-            await change_level('lastmap')
+            await end_game(len(game_state.players.keys()))
+            # await change_level('lastmap' + str(len(game_state.players.keys())))
             return
         await change_level('firstmap')
         return
