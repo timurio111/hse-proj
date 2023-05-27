@@ -244,6 +244,11 @@ class GameManager:
         if data_packet.data_type == self.DataPacket.GAME_ALREADY_STARTED:
             raise Exception('Game is already started')
 
+        if data_packet.data_type == self.DataPacket.DISCONNECT:
+            event = pygame.event.Event(SHOW_GAME_STATISTICS)
+            event.dict['statistics'] = data_packet['message']
+            pygame.event.post(event)
+
         if data_packet.data_type == self.DataPacket.GAME_INFO:
             GameManager.game_id = game_id
             self.game = Game(clock, self, data_packet['level_name'], data_packet['position'])
@@ -431,6 +436,8 @@ def main(screen):
             if type(current_screen) == StartServerMenu:
                 current_screen.event_handle(event)
 
+            if event.type == SHOW_GAME_STATISTICS:
+                current_screen = MessageScreen(event.dict['statistics'], pygame.event.Event(OPEN_MAIN_MENU_EVENT))
             if event.type == LOADING_SCREEN_EVENT:
                 current_screen = LoadingScreen()
             if event.type == START_GAME_EVENT:

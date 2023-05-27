@@ -270,10 +270,9 @@ async def disconnect(client_id: int):
             game_state.players[client_id].death()
         if client_id in game_state.players.keys():
             game_state.players.pop(client_id)
-
-        id_to_stream.pop(client_id)
-        id_to_udp_address.pop(client_id)
-        client_socket_to_id.pop((reader, writer))
+            id_to_stream.pop(client_id)
+            id_to_udp_address.pop(client_id)
+            client_socket_to_id.pop((reader, writer))
         writer.close()
         await writer.wait_closed()
         print(f'client with id {client_id} disconnected')
@@ -316,12 +315,6 @@ def spawn_players():
             yield player_id, spawn_pos
 
 
-def timer(n_sec):
-    time.sleep(n_sec)
-    for player in game_state.players_alive:
-        game_state.players[player].death()
-
-
 async def end_game(n_players):
     game_state.lastlevel = True
     await change_level('lastmap' + str(n_players))
@@ -346,8 +339,13 @@ async def change_level(level_name):
                 weapon_data = {'weapon_id': weapon_id, 'weapon_data': weapon.encode()}
                 response = DataPacket(DataPacket.NEW_WEAPON_FROM_SERVER, weapon_data)
                 await send(player_id, response)
-    if game_state.lastlevel:
-        threading.Thread(target=timer(10)).start()
+
+        if game_state.lastlevel:
+            await asyncio.sleep(0)
+            for player_id in game_state.players.keys():
+                response = DataPacket(DataPacket.DISCONNECT, {'message': 'game ended'})
+                await send(player_id, response)
+            quit(0)
 
 
 async def handle_packet(data_packet: DataPacket):
@@ -453,9 +451,8 @@ async def update(time_delta):
         await asyncio.sleep(1)
         if game_state.level_id == GameState.MAX_LEVELS:
             await end_game(len(game_state.players.keys()))
-            # await change_level('lastmap' + str(len(game_state.players.keys())))
-            return
-        await change_level('firstmap')
+        else:
+            await change_level('firstmap')
         return
 
     # Пробегаемся по все игрокам
