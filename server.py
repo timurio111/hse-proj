@@ -34,11 +34,9 @@ class GameStatistics:
     def new_player(self, player_id: int):
         self.players_data[player_id] = {'kill': 0, 'death': 0, 'win': 0, 'damage': 0}
 
-    def sort_by_balls(self):
-        rating = []
-        for player in self.players_data.keys():
-            rating.append((self.players_data[player]['win'], self.players_data[player]['kill'], -self.players_data[player]['death'], player))
-        rating.sort(reverse=True)
+    def sort_by_rating(self):
+        rating = list(self.players_data.keys())
+        rating.sort(key=lambda player: (self[player]['win'], self[player]['kill'], -self[player]['death']), reverse=True)
         return rating
 
     def __getitem__(self, item):
@@ -78,7 +76,7 @@ class ServerPlayer:
 
     def apply(self, data) -> None:
         self.x, self.y, self.status, self.direction, self.sprite_animation_counter, self.hp, \
-        self.vx, self.vy, self.off_ground_counter = data
+            self.vx, self.vy, self.off_ground_counter = data
         self.sprite_rect.x = self.x + self.sprite_offset_x
         self.sprite_rect.y = self.y + self.sprite_offset_y
 
@@ -305,8 +303,9 @@ async def send(client_id: int, data_packet: DataPacket):
 
 def spawn_players():
     if game_state.lastlevel:
-        for player in game_statistics.sort_by_balls():
-            player_id = player[3]
+        for player_id in game_statistics.sort_by_rating():
+            if player_id not in game_state.players.keys():
+                continue
             game_state.players[player_id].hp = 100
             spawn_pos = game_state.get_spawn_point()
             yield player_id, spawn_pos
