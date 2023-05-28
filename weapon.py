@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
-
 import pygame
 import yaml
+from sound import load_weapon_sound
+
+pygame.mixer.init()
 
 
 def load_weapon_sprites(scale: int) -> (dict[str, list[pygame.surface.Surface]], dict[str, int]):
@@ -73,6 +75,7 @@ class Weapon:
         self.arms_sprite: pygame.Surface = None
         self.ammo = ammo
         self.damage = Weapon.all_weapons_info[self.name]['BULLET_DAMAGE']
+        self.sounds = load_weapon_sound(name)
 
         if pos:
             self.direction = 'right'
@@ -105,7 +108,9 @@ class Weapon:
         if self.status == 'shoot':
             return None
         if self.ammo <= 0:
+            self.sounds['is_empty'].sound_play()
             return None
+        self.sounds['shot'].sound_play()
         self.ammo -= 1
         self.status = 'shoot'
         self.sprite_number = 0
@@ -164,7 +169,6 @@ class Weapon:
             weapon_position = self.get_position()
             weapon_coords = (weapon_position[0] + offset_x, weapon_position[1] + offset_y)
             screen.blit(self.weapon_sprite, weapon_coords)
-
             arms_position = self.owner.rect.x + offset_x, self.owner.rect.y + offset_y
             screen.blit(self.arms_sprite, arms_position)
         else:

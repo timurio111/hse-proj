@@ -1,5 +1,7 @@
 import pygame
 import pyperclip
+import os
+from sound import SoundCore
 
 
 class TextInput:
@@ -73,6 +75,7 @@ class Button:
         self.image_hover = self.__get_image((180, 180, 180))
         self.image_pressed = self.__get_image((150, 150, 150))
         self.rect = pygame.Rect(pos, size)
+        self.is_hover_sound_played = False
 
     def __get_image(self, color) -> pygame.Surface:
         frame = pygame.Surface((self.width, self.height))
@@ -103,13 +106,18 @@ class Button:
         mouse_pos = (mouse_pos[0] // scale, mouse_pos[1] // scale)
         if self.rect.collidepoint(mouse_pos):
             self.hover = True
+            if not self.is_hover_sound_played:
+                SoundCore.menu_button_is_hover.sound_play()
+                self.is_hover_sound_played = True
             if pygame.mouse.get_pressed()[0]:
                 self.pressed = True
             else:
                 if self.pressed:
                     if self.event is not None:
+                        SoundCore.menu_button_is_pressed.sound_play()
                         pygame.event.post(self.event)
                 self.pressed = False
         else:
             self.pressed = False
             self.hover = False
+            self.is_hover_sound_played = False
