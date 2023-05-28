@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-import threading
+
 
 import pygame
 
@@ -340,12 +340,13 @@ async def change_level(level_name):
                 response = DataPacket(DataPacket.NEW_WEAPON_FROM_SERVER, weapon_data)
                 await send(player_id, response)
 
-        if game_state.lastlevel:
-            await asyncio.sleep(10)
-            for player_id in game_state.players.keys():
-                response = DataPacket(DataPacket.DISCONNECT, {'statistics': game_statistics.players_data})
-                await send(player_id, response)
-            quit(0)
+    if game_state.lastlevel:
+        await asyncio.sleep(5)
+        for player_id in game_state.players.keys():
+            response = DataPacket(DataPacket.DISCONNECT, {'statistics': game_statistics.players_data})
+            await send(player_id, response)
+        asyncio.sleeep(0.5) # хз, вроде, стало стабильнее
+        quit(0)
 
 
 async def handle_packet(data_packet: DataPacket):

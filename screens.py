@@ -1,8 +1,6 @@
 import os
 from string import Template
 
-import pygame
-
 from config import WIDTH, HEIGHT
 from event_codes import *
 from gui_elements import Button, TextInput
@@ -57,7 +55,7 @@ class ConnectToServerMenu:
         self.text_input_address = TextInput(size=(WIDTH // 1.1, 25),
                                             pos=((WIDTH - WIDTH // 1.1) // 2, HEIGHT // 2),
                                             hint="server address",
-                                            text="localhost:5555",
+                                            text="",
                                             font='data/fonts/menu_font.ttf')
 
         self.button_start_game = Button(size=(WIDTH // 5, 40),
@@ -148,18 +146,31 @@ class LoadingScreen:
 
 
 class EndScreen:
-    TABCOORD = (int(WIDTH * 0.1), int(HEIGHT * 0.1), int(WIDTH * 0.9), int(HEIGHT * 0.9))
-    PLAYERCOORD1 = (int(WIDTH * 0.15), int(HEIGHT * 0.15), int(WIDTH * 0.3), int(HEIGHT * 0.4))
-    GAMECOORD = (int(WIDTH * 0.45), int(HEIGHT * 0.15), int(WIDTH * 0.55), int(HEIGHT * 0.75))
+    # это потом переделаю, пока искал константы
+    TABCOORD = (WIDTH * 0.01, HEIGHT * 0.05, WIDTH * 0.98, HEIGHT * 0.87)
+    PLAYERCOORD1 = (WIDTH * 0.02, HEIGHT * 0.07, WIDTH * 0.22, HEIGHT * 0.35)
+    PLAYERCOORD2 = (WIDTH * 0.77, HEIGHT * 0.07, WIDTH * 0.97, HEIGHT * 0.35)
+    PLAYERCOORD3 = (WIDTH * 0.02, HEIGHT * 0.07, WIDTH * 0.22, HEIGHT * 0.35)
+    PLAYERCOORD4 = (WIDTH * 0.02, HEIGHT * 0.07, WIDTH * 0.22, HEIGHT * 0.35)
+    GAMECOORD = (WIDTH * 0.25, HEIGHT * 0.1, WIDTH * 0.45, HEIGHT * 0.75)
 
     def __init__(self, statistics):
+        self.background = load_background('gradient2.png')
         self.n_players = len(statistics.keys())
-        self.player_descr = Template('id:$player_id\nwins:$player_wins\nkills:$player_kills\ndeaths:$player_deaths\nplayer_damage:$player_damage')
         self.table = pygame.Rect(EndScreen.TABCOORD)
         self.player_card1 = pygame.Rect(EndScreen.PLAYERCOORD1)
+        self.player_card2 = pygame.Rect(EndScreen.PLAYERCOORD2)
         self.game_card = pygame.Rect(EndScreen.GAMECOORD)
+        self.button_back = Button(size=(WIDTH // 5, 30),
+                                  pos=(WIDTH - WIDTH // 5 - 10, HEIGHT - 40),
+                                  text="Menu",
+                                  event=pygame.event.Event(OPEN_MAIN_MENU_EVENT))
 
     def draw(self, screen: pygame.Surface):
+        screen.blit(self.background, (0, 0))
         pygame.draw.rect(screen, WHITE, self.table)
         pygame.draw.rect(screen, GRAY, self.player_card1)
+        pygame.draw.rect(screen, GRAY, self.player_card2)
         pygame.draw.rect(screen, BLACK, self.game_card)
+        self.button_back.draw(screen, 1)
+
