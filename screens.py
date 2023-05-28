@@ -5,7 +5,7 @@ import pygame.event
 from config import WIDTH, HEIGHT
 from event_codes import *
 from gui_elements import Button, TextInput
-
+from sound import SoundCore
 
 def load_background(image_name: str) -> pygame.Surface:
     path = os.path.join("data", "Background", image_name)
@@ -33,10 +33,9 @@ class Menu:
                                   text="Quit", font='data/fonts/menu_font.ttf')
         self.button_settings = Button(size=(WIDTH // 4.2, HEIGHT // 12),
                                       pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 + 2 * HEIGHT // 8),
-                                      event=pygame.event.Event(EXIT_GAME_EVENT),
+                                      event=pygame.event.Event(OPEN_SETTINGS_MENU_EVENT),
                                       text="Settings",
                                       font='data/fonts/menu_font.ttf')
-
 
     def draw(self, screen: pygame.Surface):
         screen.blit(self.background, (0, 0))
@@ -44,7 +43,6 @@ class Menu:
         self.button_start_server.draw(screen, 1)
         self.button_settings.draw(screen, 1)
         self.button_exit.draw(screen, 1)
-
 
 
 class ConnectToServerMenu:
@@ -152,37 +150,46 @@ class LoadingScreen:
     def draw(self, screen):
         screen.blit(self.image, (0, 0))
 
-class Settings:
+
+class SettingsMenu:
     def __init__(self):
         self.visible = True
         self.background = load_background("gradient2.png")
-        self.change_window_mode = Button(size=(WIDTH // 2, HEIGHT // 12),
-                                          pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2),
-                                          event=pygame.event.Event(START_SERVER_MENU_EVENT),
-                                          text="Change Window Mode",
-                                          font='data/fonts/menu_font.ttf')
+        self.change_window_mode = Button(size=(WIDTH // 4.2, HEIGHT // 12),
+                                         pos=(3 * WIDTH // 4 - WIDTH // 4.2, HEIGHT // 2 + 2 * HEIGHT // 8),
+                                         event=pygame.event.Event(START_SERVER_MENU_EVENT),
+                                         text="Change Window Mode",
+                                         font='data/fonts/menu_font.ttf')
         self.music_off = Button(size=(WIDTH // 2, HEIGHT // 12),
-                                     pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 + HEIGHT // 8),
-                                     event=None,
-                                     text="Music off/on",
-                                     font='data/fonts/menu_font.ttf')
-        self.sounds_off = Button(size=(WIDTH // 4.2, HEIGHT // 12),
-                                  pos=(3 * WIDTH // 4 - WIDTH // 4.2, HEIGHT // 2 + 2 * HEIGHT // 8),
-                                  event=None,
-                                  text="Sound off/on", font='data/fonts/menu_font.ttf')
+                                pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 + HEIGHT // 8),
+                                event=pygame.event.Event(CHANGE_MUSIC_MODE),
+                                text='Music off' if SoundCore.is_music_on else 'Music on',
+                                font='data/fonts/menu_font.ttf')
+        self.sounds_off = Button(size=(WIDTH // 2, HEIGHT // 12),
+                                 pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2),
+
+                                 event=pygame.event.Event(CHANGE_SOUND_MODE),
+                                 text='Sound off' if SoundCore.is_sound_on else 'Sound on', font='data/fonts/menu_font.ttf')
         self.return_back = Button(size=(WIDTH // 4.2, HEIGHT // 12),
-                                      pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 + 2 * HEIGHT // 8),
-                                      event=pygame.event.Event(OPEN_MAIN_MENU_EVENT),
-                                      text="To Menu",
-                                      font='data/fonts/menu_font.ttf')
+                                  pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 + 2 * HEIGHT // 8),
+                                  event=pygame.event.Event(OPEN_MAIN_MENU_EVENT),
+                                  text="To Menu",
+                                  font='data/fonts/menu_font.ttf')
 
-
+    def buttons_update(self):
+        self.sounds_off = Button(size=(WIDTH // 2, HEIGHT // 12),
+                                 pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2),
+                                 event=pygame.event.Event(CHANGE_SOUND_MODE),
+                                 text='Sound off' if SoundCore.is_sound_on else 'Sound on', font='data/fonts/menu_font.ttf')
+        self.music_off = Button(size=(WIDTH // 2, HEIGHT // 12),
+                                pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 + HEIGHT // 8),
+                                event=pygame.event.Event(CHANGE_MUSIC_MODE),
+                                text='Music off' if SoundCore.is_music_on else 'Music on',
+                                font='data/fonts/menu_font.ttf')
     def draw(self, screen: pygame.Surface):
         screen.blit(self.background, (0, 0))
-        self.button_connect.draw(screen, 1)
-        self.button_start_server.draw(screen, 1)
-        self.button_settings.draw(screen, 1)
-        self.button_exit.draw(screen, 1)
+        self.change_window_mode.draw(screen, 1)
+        self.music_off.draw(screen, 1)
+        self.sounds_off.draw(screen, 1)
+        self.return_back.draw(screen, 1)
 
-
-        #ПЫ. СЫ. Нужна помощь с добавлением новых евентов, я не разобрался

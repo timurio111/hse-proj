@@ -1,9 +1,10 @@
 import os
-
 import pygame
 import yaml
+from sound import load_weapon_sound
 
 pygame.mixer.init()
+
 
 def load_weapon_sprites(scale: int) -> (dict[str, list[pygame.surface.Surface]], dict[str, int]):
     path = os.path.join("data", 'WeaponSprites')
@@ -59,20 +60,6 @@ def load_weapon_sprites(scale: int) -> (dict[str, list[pygame.surface.Surface]],
     return sprites_dict, weapon_data
 
 
-def load_weapon_sound(
-        name):  # передаем название папки с оружием, на выходе - три звука: перезарядка, выстрел, холостой выстрел
-    path = os.path.join('data', 'WeaponSprites', name, 'sound')
-    all_sounds = ['is_empty', 'reload', 'shot']
-    result = {}
-
-    for sound_name in all_sounds:
-        try:
-            result[sound_name] = pygame.mixer.Sound(os.path.join(path, sound_name + '.mp3'))
-        except Exception:
-            result[sound_name] = None
-    return result
-
-
 class Weapon:
     all_weapons_sprites, all_weapons_info = load_weapon_sprites(1)
 
@@ -86,7 +73,6 @@ class Weapon:
         self.arms_sprite: pygame.Surface = None
         self.ammo = ammo
         self.damage = Weapon.all_weapons_info[self.name]['BULLET_DAMAGE']
-
         self.sounds = load_weapon_sound(name)
 
         if pos:
@@ -120,9 +106,9 @@ class Weapon:
         if self.status == 'shoot':
             return None
         if self.ammo <= 0:
-            self.sounds['is_empty'].play()
+            self.sounds['is_empty'].sound_play()
             return None
-        self.sounds['shot'].play()
+        self.sounds['shot'].sound_play()
         self.ammo -= 1
         self.status = 'shoot'
         self.sprite_number = 0

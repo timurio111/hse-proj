@@ -28,7 +28,8 @@ from event_codes import *
 from level import Level, Tile
 from player import Player
 from weapon import Weapon, Bullet
-from screens import Menu, ConnectToServerMenu, LoadingScreen, MessageScreen, StartServerMenu
+from screens import Menu, ConnectToServerMenu, LoadingScreen, MessageScreen, StartServerMenu, SettingsMenu
+from sound import SoundCore
 
 
 class Camera:
@@ -411,8 +412,7 @@ def main(screen):
     current_screen = Menu()
     game_manager = GameManager()
     run = True
-    pygame.mixer.music.load(os.path.join('data', 'Music', 'menu_theme.mp3'))
-    pygame.mixer.music.play()
+    SoundCore.main_menu_music.music_play()
     while run:
         clock.tick(MAX_FPS)
         for event in pygame.event.get():
@@ -438,17 +438,17 @@ def main(screen):
             if event.type == START_GAME_EVENT:
                 pass
             if event.type == OPEN_CONNECTION_MENU_EVENT:
-                pygame.mixer.music.load(os.path.join('data', 'Music', 'server_connection_menu_theme.mp3'))
-                pygame.mixer.music.play()
+                if SoundCore.current_music != SoundCore.SERVER_CONNECTION_MUSIC:
+                    SoundCore.server_connection_music.music_play()
                 current_screen = ConnectToServerMenu()
             if event.type == OPEN_MAIN_MENU_EVENT:
-                pygame.mixer.music.load(os.path.join('data', 'Music', 'menu_theme.mp3'))
-                pygame.mixer.music.play()
                 current_screen = Menu()
+                if SoundCore.current_music != SoundCore.MAIN_MENU_MUSIC:
+                    SoundCore.main_menu_music.music_play()
+
             if event.type == CONNECT_TO_SERVER_EVENT:
                 try:
-                    pygame.mixer.music.load(os.path.join('data', 'Music', 'in_game_theme.mp3'))
-                    pygame.mixer.music.play()
+                    SoundCore.in_game_music.music_play()
                     server, port = validate_address(event.dict['input'])
                     current_screen = game_manager
                     game_manager.connect(server, port)
@@ -456,9 +456,28 @@ def main(screen):
                     current_screen = MessageScreen(str(e), pygame.event.Event(OPEN_CONNECTION_MENU_EVENT))
                     print(e)
             if event.type == START_SERVER_MENU_EVENT:
-                pygame.mixer.music.load(os.path.join('data', 'Music', 'server_connection_menu_theme.mp3'))
-                pygame.mixer.music.play()
+                SoundCore.server_connection_music.music_play()
                 current_screen = StartServerMenu()
+
+            if event.type == OPEN_SETTINGS_MENU_EVENT:
+                current_screen = SettingsMenu()
+
+            if event.type == CHANGE_SOUND_MODE:
+                SoundCore.is_sound_on = not SoundCore.is_sound_on
+                current_screen.buttons_update()
+                if SoundCore.is_sound_on:
+                    SoundCore.sound_on()
+                else:
+                    SoundCore.sound_off()
+
+            if event.type == CHANGE_MUSIC_MODE:
+                SoundCore.is_music_on = not SoundCore.is_music_on
+                current_screen.buttons_update()
+                if SoundCore.is_music_on:
+                    SoundCore.music_on()
+                    SoundCore.main_menu_music.music_play()
+                else:
+                    SoundCore.music_off()
 
         try:
             current_screen.draw(screen)
@@ -467,6 +486,7 @@ def main(screen):
         pygame.display.set_caption(f"{int(clock.get_fps())} FPS")
         pygame.display.flip()
 
+    pygame.mixer.quit()
     pygame.quit()
 
 
