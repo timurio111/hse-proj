@@ -28,7 +28,7 @@ from event_codes import *
 from level import Level, Tile
 from player import Player
 from weapon import Weapon, Bullet
-from screens import Menu, ConnectToServerMenu, LoadingScreen, MessageScreen, StartServerMenu, SettingsMenu
+from screens import Menu, ConnectToServerMenu, LoadingScreen, MessageScreen, StartServerMenu, SettingsMenu, EndScreen
 from sound import SoundCore
 
 
@@ -222,23 +222,7 @@ class GameManager:
         self.network = Network(server, port, self.callback)
         self.network.authorize()
 
-    def read(self, client_socket: socket.socket):
-        if client_socket.type == socket.SOCK_DGRAM:
-            return client_socket.recv(1024)
-        data_bytes = b''
-        while True:
-            byte = client_socket.recv(1)
-            if byte == b'':
-                raise Exception('Disconnected')
-            if byte == b'\n':
-                break
-            data_bytes += byte
-        return data_bytes
-
-    def callback(self, client_socket: socket.socket, mask):
-
-        data_bytes = self.read(client_socket)
-        data_packet = self.DataPacket.from_bytes(data_bytes)
+    def callback(self, data_packet: DataPacket, mask):
         game_id = data_packet.headers['game_id']
 
         if data_packet.data_type == self.DataPacket.AUTH:
@@ -247,9 +231,15 @@ class GameManager:
         if data_packet.data_type == self.DataPacket.GAME_ALREADY_STARTED:
             raise Exception('Game is already started')
 
+        if data_packet.data_type == self.DataPacket.DISCONNECT:
+            event = pygame.event.Event(SHOW_GAME_STATISTICS)
+            event.dict['statistics'] = data_packet['statistics']
+            pygame.event.post(event)
+
         if data_packet.data_type == self.DataPacket.GAME_INFO:
             GameManager.game_id = game_id
             self.game = Game(clock, self, data_packet['level_name'], data_packet['position'])
+            self.game.player.set_color(data_packet['color'])
             self.send_initial_info()
             self.game_started = True
 
@@ -260,7 +250,8 @@ class GameManager:
                     continue
 
                 if player_id not in self.game.players.keys():
-                    self.game.players[player_id] = Player((0, 0), 1, "Knight")
+                    color = data[9]
+                    self.game.players[player_id] = Player((0, 0), 1, "Knight", color)
 
                 self.game.players[player_id].apply(data)
 
@@ -269,10 +260,10 @@ class GameManager:
                     self.game.players.pop(player_id)
 
         if data_packet.data_type == self.DataPacket.NEW_SHOT_FROM_SERVER:
-            client_id, bullet_id, bullet = data_packet.data
+            client_id, bullet_id, bullet_data = data_packet.data
 
             bullet_id = int(bullet_id)
-            self.game.bullets[bullet_id] = Bullet((bullet[0], bullet[1]), (bullet[2], bullet[3]), bullet[4])
+            self.game.bullets[bullet_id] = Bullet.from_data(bullet_data)
             if client_id == self.network.id:
                 self.game.player.weapon.shoot()
             else:
@@ -340,7 +331,7 @@ class GameManager:
         if bullet is None:
             return
 
-        bullet_data = {'id': self.network.id, 'data': bullet.encode()}
+        bullet_data = {'data': bullet.encode()}
         response = self.DataPacket(self.DataPacket.NEW_SHOT_FROM_CLIENT, bullet_data)
         self.send(response)
 
@@ -433,6 +424,8 @@ def main(screen):
             if type(current_screen) == StartServerMenu:
                 current_screen.event_handle(event)
 
+            if event.type == SHOW_GAME_STATISTICS:
+                current_screen = EndScreen(event.dict['statistics'])
             if event.type == LOADING_SCREEN_EVENT:
                 current_screen = LoadingScreen()
             if event.type == START_GAME_EVENT:

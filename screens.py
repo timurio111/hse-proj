@@ -1,4 +1,5 @@
 import os
+from string import Template
 
 import pygame.event
 
@@ -6,6 +7,14 @@ from config import WIDTH, HEIGHT
 from event_codes import *
 from gui_elements import Button, TextInput
 from sound import SoundCore
+
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+GRAY = (125, 125, 125)
+LIGHT_BLUE = (64, 128, 255)
+GREEN = (0, 200, 64)
+YELLOW = (225, 225, 0)
+PINK = (230, 50, 230)
 
 def load_background(image_name: str) -> pygame.Surface:
     path = os.path.join("data", "Background", image_name)
@@ -193,3 +202,31 @@ class SettingsMenu:
         self.sounds_off.draw(screen, 1)
         self.return_back.draw(screen, 1)
 
+class EndScreen:
+    # это потом переделаю, пока искал константы
+    TABCOORD = (WIDTH * 0.01, HEIGHT * 0.05, WIDTH * 0.98, HEIGHT * 0.87)
+    PLAYERCOORD1 = (WIDTH * 0.02, HEIGHT * 0.07, WIDTH * 0.22, HEIGHT * 0.35)
+    PLAYERCOORD2 = (WIDTH * 0.77, HEIGHT * 0.07, WIDTH * 0.97, HEIGHT * 0.35)
+    PLAYERCOORD3 = (WIDTH * 0.02, HEIGHT * 0.07, WIDTH * 0.22, HEIGHT * 0.35)
+    PLAYERCOORD4 = (WIDTH * 0.02, HEIGHT * 0.07, WIDTH * 0.22, HEIGHT * 0.35)
+    GAMECOORD = (WIDTH * 0.25, HEIGHT * 0.1, WIDTH * 0.45, HEIGHT * 0.75)
+
+    def __init__(self, statistics):
+        self.background = load_background('gradient2.png')
+        self.n_players = len(statistics.keys())
+        self.table = pygame.Rect(EndScreen.TABCOORD)
+        self.player_card1 = pygame.Rect(EndScreen.PLAYERCOORD1)
+        self.player_card2 = pygame.Rect(EndScreen.PLAYERCOORD2)
+        self.game_card = pygame.Rect(EndScreen.GAMECOORD)
+        self.button_back = Button(size=(WIDTH // 5, 30),
+                                  pos=(WIDTH - WIDTH // 5 - 10, HEIGHT - 40),
+                                  text="Menu",
+                                  event=pygame.event.Event(OPEN_MAIN_MENU_EVENT))
+
+    def draw(self, screen: pygame.Surface):
+        screen.blit(self.background, (0, 0))
+        pygame.draw.rect(screen, WHITE, self.table)
+        pygame.draw.rect(screen, GRAY, self.player_card1)
+        pygame.draw.rect(screen, GRAY, self.player_card2)
+        pygame.draw.rect(screen, BLACK, self.game_card)
+        self.button_back.draw(screen, 1)

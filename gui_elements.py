@@ -35,7 +35,9 @@ class TextInput:
             return
         if event.type == pygame.KEYDOWN:
             if (event.key == pygame.K_v) and ((event.mod & pygame.KMOD_META) or (event.mod & pygame.KMOD_CTRL)):
-                self.text += pyperclip.paste()
+                clipboard = pyperclip.paste()
+                if clipboard:
+                    self.text += clipboard
             elif event.key == pygame.K_BACKSPACE:
                 self.text = self.text[:-1]
             else:
