@@ -26,7 +26,7 @@ from event_codes import *
 from level import Level, Tile
 from player import Player
 from weapon import Weapon, Bullet
-from screens import Menu, ConnectToServerMenu, LoadingScreen, MessageScreen, StartServerMenu
+from screens import Menu, ConnectToServerMenu, LoadingScreen, MessageScreen, StartServerMenu, EndScreen
 
 
 class Camera:
@@ -244,6 +244,11 @@ class GameManager:
         if data_packet.data_type == self.DataPacket.GAME_ALREADY_STARTED:
             raise Exception('Game is already started')
 
+        if data_packet.data_type == self.DataPacket.DISCONNECT:
+            event = pygame.event.Event(SHOW_GAME_STATISTICS)
+            event.dict['statistics'] = data_packet['statistics']
+            pygame.event.post(event)
+
         if data_packet.data_type == self.DataPacket.GAME_INFO:
             GameManager.game_id = game_id
             self.game = Game(clock, self, data_packet['level_name'], data_packet['position'])
@@ -339,7 +344,7 @@ class GameManager:
         if bullet is None:
             return
 
-        bullet_data = {'id': self.network.id, 'data': bullet.encode()}
+        bullet_data = {'data': bullet.encode()}
         response = self.DataPacket(self.DataPacket.NEW_SHOT_FROM_CLIENT, bullet_data)
         self.send(response)
 
@@ -431,6 +436,8 @@ def main(screen):
             if type(current_screen) == StartServerMenu:
                 current_screen.event_handle(event)
 
+            if event.type == SHOW_GAME_STATISTICS:
+                current_screen = EndScreen(event.dict['statistics'])
             if event.type == LOADING_SCREEN_EVENT:
                 current_screen = LoadingScreen()
             if event.type == START_GAME_EVENT:
