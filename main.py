@@ -219,23 +219,7 @@ class GameManager:
         self.network = Network(server, port, self.callback)
         self.network.authorize()
 
-    def read(self, client_socket: socket.socket):
-        if client_socket.type == socket.SOCK_DGRAM:
-            return client_socket.recv(1024)
-        data_bytes = b''
-        while True:
-            byte = client_socket.recv(1)
-            if byte == b'':
-                raise Exception('Disconnected')
-            if byte == self.DataPacket.delimiter_byte:
-                break
-            data_bytes += byte
-        return data_bytes
-
-    def callback(self, client_socket: socket.socket, mask):
-
-        data_bytes = self.read(client_socket)
-        data_packet = self.DataPacket.from_bytes(data_bytes)
+    def callback(self, data_packet: DataPacket, mask):
         game_id = data_packet.headers['game_id']
 
         if data_packet.data_type == self.DataPacket.AUTH:

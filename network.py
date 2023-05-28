@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import selectors
 import socket
+from time import time
 
 
 class DataPacket:
@@ -55,6 +56,9 @@ class DataPacket:
 
 
 class Network:
+    last_udp_packet_time = 0
+    start_time = int(time())
+
     def __init__(self, server, port, callback):
         self.callback = callback
         self.server = server
@@ -87,7 +91,28 @@ class Network:
         self.tcp_client_socket.send(data_packet.encode())
 
     def send_udp(self, data_packet: DataPacket):
+        data_packet.headers['time'] = round(time() - Network.start_time, 3)
         self.udp_client_socket.sendto(data_packet.encode(), self.udp_address)
+
+    @staticmethod
+    def read_packet(sock: socket.socket):
+        if sock.type == socket.SOCK_DGRAM:
+            data = sock.recv(1024)
+            data_packet = DataPacket.from_bytes(data)
+            if data_packet.headers['time'] < Network.last_udp_packet_time:
+                return None
+            Network.last_udp_packet_time = data_packet.headers['time']
+            return data_packet
+        else:
+            data = b''
+            while True:
+                byte = sock.recv(1)
+                if byte == b'':
+                    raise Exception('Disconnected')
+                if byte == DataPacket.delimiter_byte:
+                    break
+                data += byte
+            return DataPacket.from_bytes(data)
 
     def receive(self):
         received = False
@@ -96,9 +121,11 @@ class Network:
             events = self.sel.select(timeout=0)
             if not events:
                 break
-            received = True
             for key, mask in events:
-                callback = key.data
-                callback(key.fileobj, mask)
+                data_packet = Network.read_packet(key.fileobj)
+                if data_packet is not None:
+                    received = True
+                    callback = key.data
+                    callback(data_packet, mask)
 
         return received

@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import time
 
-
 import pygame
 
 from colors import color_generator
@@ -23,8 +22,10 @@ current_id = 0
 id_to_stream: dict[int, tuple[asyncio.StreamReader, asyncio.StreamWriter]] = {}
 id_to_udp_address: dict[int, tuple[str, int]] = {}
 client_socket_to_id: dict[tuple[asyncio.StreamReader, asyncio.StreamWriter], int] = {}
+id_to_last_udp_packet_time: dict[int, float] = {}
 
 lock = asyncio.Lock()
+start_time = int(time.time())
 
 
 class GameStatistics:
@@ -228,6 +229,7 @@ async def accept_connection(reader: asyncio.StreamReader, writer: asyncio.Stream
 
     id_to_stream[client_id] = (reader, writer)
     client_socket_to_id[(reader, writer)] = current_id
+    id_to_last_udp_packet_time[client_id] = 0
     current_id += 1
 
     if game_state.game_started:
@@ -272,6 +274,7 @@ async def disconnect(client_id: int):
             game_state.players.pop(client_id)
             id_to_stream.pop(client_id)
             id_to_udp_address.pop(client_id)
+            id_to_last_udp_packet_time.pop(client_id)
             client_socket_to_id.pop((reader, writer))
         writer.close()
         await writer.wait_closed()
@@ -345,7 +348,7 @@ async def change_level(level_name):
         for player_id in game_state.players.keys():
             response = DataPacket(DataPacket.DISCONNECT, {'statistics': game_statistics.players_data})
             await send(player_id, response)
-        asyncio.sleeep(0.5) # хз, вроде, стало стабильнее
+        await asyncio.sleep(5)  # хз, вроде, стало стабильнее
         quit(0)
 
 
@@ -522,6 +525,9 @@ class UdpServerProtocol(asyncio.DatagramProtocol):
     def datagram_received(self, data, addr):
         data_packet = DataPacket.from_bytes(data)
         client_id = data_packet.headers['id']
+        if data_packet.headers['time'] < id_to_last_udp_packet_time[client_id]:
+            return
+        id_to_last_udp_packet_time[client_id] = data_packet.headers['time']
         id_to_udp_address[client_id] = addr
         asyncio.get_running_loop().create_task(self.handle(data_packet))
 
@@ -530,6 +536,7 @@ class UdpServerProtocol(asyncio.DatagramProtocol):
 
     def send(self, client_id: int, data_packet: DataPacket):
         data_packet.headers['game_id'] = game_state.level_id
+        data_packet.headers['time'] = round(time.time() - start_time, 3)
         self.transport.sendto(data_packet.encode(), id_to_udp_address[client_id])
 
 
