@@ -525,6 +525,8 @@ class UdpServerProtocol(asyncio.DatagramProtocol):
     def datagram_received(self, data, addr):
         data_packet = DataPacket.from_bytes(data)
         client_id = data_packet.headers['id']
+        if client_id == -1:
+            return
         if data_packet.headers['time'] < id_to_last_udp_packet_time[client_id]:
             return
         id_to_last_udp_packet_time[client_id] = data_packet.headers['time']
