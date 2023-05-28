@@ -26,7 +26,7 @@ from event_codes import *
 from level import Level, Tile
 from player import Player
 from weapon import Weapon, Bullet
-from screens import Menu, ConnectToServerMenu, LoadingScreen, MessageScreen, StartServerMenu
+from screens import Menu, ConnectToServerMenu, LoadingScreen, MessageScreen, StartServerMenu, EndScreen
 
 
 class Camera:
@@ -246,7 +246,7 @@ class GameManager:
 
         if data_packet.data_type == self.DataPacket.DISCONNECT:
             event = pygame.event.Event(SHOW_GAME_STATISTICS)
-            event.dict['statistics'] = data_packet['message']
+            event.dict['statistics'] = data_packet['statistics']
             pygame.event.post(event)
 
         if data_packet.data_type == self.DataPacket.GAME_INFO:
@@ -437,7 +437,7 @@ def main(screen):
                 current_screen.event_handle(event)
 
             if event.type == SHOW_GAME_STATISTICS:
-                current_screen = MessageScreen(event.dict['statistics'], pygame.event.Event(OPEN_MAIN_MENU_EVENT))
+                current_screen = EndScreen(event.dict['statistics'])
             if event.type == LOADING_SCREEN_EVENT:
                 current_screen = LoadingScreen()
             if event.type == START_GAME_EVENT:

@@ -1,9 +1,19 @@
 import os
+from string import Template
+
+import pygame
 
 from config import WIDTH, HEIGHT
 from event_codes import *
 from gui_elements import Button, TextInput
 
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+GRAY = (125, 125, 125)
+LIGHT_BLUE = (64, 128, 255)
+GREEN = (0, 200, 64)
+YELLOW = (225, 225, 0)
+PINK = (230, 50, 230)
 
 def load_background(image_name: str) -> pygame.Surface:
     path = os.path.join("data", "Background", image_name)
@@ -47,7 +57,7 @@ class ConnectToServerMenu:
         self.text_input_address = TextInput(size=(WIDTH // 1.1, 25),
                                             pos=((WIDTH - WIDTH // 1.1) // 2, HEIGHT // 2),
                                             hint="server address",
-                                            text="",
+                                            text="localhost:5555",
                                             font='data/fonts/menu_font.ttf')
 
         self.button_start_game = Button(size=(WIDTH // 5, 40),
@@ -135,3 +145,21 @@ class LoadingScreen:
 
     def draw(self, screen):
         screen.blit(self.image, (0, 0))
+
+
+class EndScreen:
+    TABCOORD = (int(WIDTH * 0.1), int(HEIGHT * 0.1), int(WIDTH * 0.9), int(HEIGHT * 0.9))
+    PLAYERCOORD1 = (int(WIDTH * 0.15), int(HEIGHT * 0.15), int(WIDTH * 0.3), int(HEIGHT * 0.4))
+    GAMECOORD = (int(WIDTH * 0.45), int(HEIGHT * 0.15), int(WIDTH * 0.55), int(HEIGHT * 0.75))
+
+    def __init__(self, statistics):
+        self.n_players = len(statistics.keys())
+        self.player_descr = Template('id:$player_id\nwins:$player_wins\nkills:$player_kills\ndeaths:$player_deaths\nplayer_damage:$player_damage')
+        self.table = pygame.Rect(EndScreen.TABCOORD)
+        self.player_card1 = pygame.Rect(EndScreen.PLAYERCOORD1)
+        self.game_card = pygame.Rect(EndScreen.GAMECOORD)
+
+    def draw(self, screen: pygame.Surface):
+        pygame.draw.rect(screen, WHITE, self.table)
+        pygame.draw.rect(screen, GRAY, self.player_card1)
+        pygame.draw.rect(screen, BLACK, self.game_card)

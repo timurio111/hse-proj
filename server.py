@@ -341,9 +341,9 @@ async def change_level(level_name):
                 await send(player_id, response)
 
         if game_state.lastlevel:
-            await asyncio.sleep(0)
+            await asyncio.sleep(10)
             for player_id in game_state.players.keys():
-                response = DataPacket(DataPacket.DISCONNECT, {'message': 'game ended'})
+                response = DataPacket(DataPacket.DISCONNECT, {'statistics': game_statistics.players_data})
                 await send(player_id, response)
             quit(0)
 
