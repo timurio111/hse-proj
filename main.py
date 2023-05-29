@@ -109,6 +109,7 @@ class Game:
         self.camera.update(time_delta)
 
         for weapon_id, weapon in self.weapons.items():
+            weapon.update(time_delta, self.level)
             weapon.update_sprite(time_delta)
 
         for player_id, player in self.players.items():

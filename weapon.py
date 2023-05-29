@@ -33,6 +33,7 @@ def load_weapon_sprites(scale: int) -> (dict[str, list[pygame.surface.Surface]],
                 weapon_data[directory]['OFFSET_Y'] = data['OFFSET_Y']
                 weapon_data[directory]['BULLET_SPEED'] = data['BUlLET_SPEED']
                 weapon_data[directory]['BULLET_DAMAGE'] = data['BULLET_DAMAGE']
+                weapon_data[directory]['BULLET_Y_ACCELERATION'] = data['BULLET_Y_ACCELERATION']
                 weapon_data[directory]['PATRONS'] = data['PATRONS']
                 weapon_data[directory]['RELOAD_T'] = data['RELOAD_T']
                 weapon_data[directory]['BARREL_OFFSET_X'] = data['BARREL_OFFSET_X']
@@ -77,6 +78,7 @@ class Weapon:
         self.damage = Weapon.all_weapons_info[self.name]['BULLET_DAMAGE']
         self.sounds = load_weapon_sound(name)
 
+        self.vy = 0
         if pos:
             self.direction = 'right'
             self.x = pos[0]
@@ -85,6 +87,17 @@ class Weapon:
             self.direction = owner.direction
             self.owner = owner
             self.x, self.y = owner.rect.x, owner.rect.y
+
+        image_offset_x = Weapon.all_weapons_info[name]['IMAGE_OFFSET_X']
+        image_offset_y = Weapon.all_weapons_info[name]['IMAGE_OFFSET_Y']
+        image_width = Weapon.all_weapons_info[name]['IMAGE_WIDTH']
+        image_height = Weapon.all_weapons_info[name]['IMAGE_HEIGHT']
+
+        self.weapon_rect_height = Weapon.all_weapons_info[name]['WEAPON_RECT_HEIGHT']
+        self.weapon_rect_width = Weapon.all_weapons_info[name]['WEAPON_RECT_WIDTH']
+        self.center_offset_x = image_offset_x + image_width // 2
+        self.center_offset_y = image_offset_x + image_height // 2
+        self.bottom_offset_y = image_offset_y + image_height
 
         # Everything is measured in seconds
         self.animation_switch_timer: float = 0
@@ -116,15 +129,27 @@ class Weapon:
         self.sprite_number = 0
 
         speed_x = (1 if self.direction == 'right' else -1) * Weapon.all_weapons_info[self.name]['BULLET_SPEED']
+        ay = Weapon.all_weapons_info[self.name]['BULLET_Y_ACCELERATION']
+        return Bullet(self.get_barrel_position(), (speed_x, 0), self.damage, ay)
 
-        return Bullet(self.get_barrel_position(), (speed_x, 0), self.damage)
-
-    def update_sprite(self, time_delta):
+    def update(self, time_delta, level):
+        time_delta = min(1 / 20, time_delta)
         if self.attached:
             self.direction = self.owner.direction
             self.x = self.owner.rect.x + Weapon.all_weapons_info[self.name][f'OFFSET_X_{self.direction.upper()}']
             self.y = self.owner.rect.y + Weapon.all_weapons_info[self.name]['OFFSET_Y']
+        else:
+            dvy = 128
+            dy = int(time_delta * self.vy)
+            self.y += dy
+            if level.collide_point(*self.get_center()):
+                self.y -= dy
+                self.vy = 0
+            else:
+                self.vy += dvy
+                self.vy = min(self.vy, 1024)
 
+    def update_sprite(self, time_delta):
         self.animation_switch_timer += time_delta
         if self.animation_switch_timer >= self.animation_switch_time:
             self.sprite_number += 1
@@ -149,6 +174,12 @@ class Weapon:
 
     def get_position(self):
         return self.x, self.y
+
+    def get_center(self) -> tuple[int, int]:
+        if self.direction == 'right':
+            return self.x + self.center_offset_x, self.y + self.bottom_offset_y
+        elif self.direction == 'left':
+            return self.x + self.weapon_rect_width - self.center_offset_x, self.y + self.bottom_offset_y
 
     def get_barrel_position(self):
         if self.direction == 'right':
@@ -177,24 +208,26 @@ class Weapon:
 
 
 class Bullet:
-    def __init__(self, position, speed, damage):
+    def __init__(self, position, speed, damage, acceleration_y):
         self.damage = damage
+        self.ay = acceleration_y
         self.x, self.y = position
         self.vx, self.vy = speed
         self.image = pygame.surface.Surface((10, 10))
         self.image.fill((255, 255, 255))
 
     def encode(self):
-        return [(self.x, self.y), (self.vx, self.vy), self.damage]
+        return [(self.x, self.y), (self.vx, self.vy), self.damage, self.ay]
 
     def apply(self, data):
-        self.x, self.y, self.vx, self.vy = data
+        self.x, self.y, self.vx, self.vy, self.ay = data
 
     @staticmethod
     def from_data(data: list) -> Bullet:
         return Bullet(*data)
 
     def update(self, time_delta):
+        self.vy += self.ay
         dx, dy = self.vx * time_delta, self.vy * time_delta
         self.x += dx
         self.y += dy

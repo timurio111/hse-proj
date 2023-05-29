@@ -24,7 +24,6 @@ id_to_udp_address: dict[int, tuple[str, int]] = {}
 client_socket_to_id: dict[tuple[asyncio.StreamReader, asyncio.StreamWriter], int] = {}
 id_to_last_udp_packet_time: dict[int, float] = {}
 
-lock = asyncio.Lock()
 start_time = int(time.time())
 
 
@@ -107,8 +106,9 @@ class ServerPlayer:
 class ServerBullet:
     bullet_id = 0
 
-    def __init__(self, owner: int, pos: tuple[int, int], v: tuple[int, int], damage: int):
+    def __init__(self, owner: int, pos: tuple[int, int], v: tuple[int, int], damage: int, ay: int):
         self.owner = owner
+        self.ay = ay
         self.x, self.y = pos
         self.vx, self.vy = v
         self.damage = damage
@@ -120,6 +120,7 @@ class ServerBullet:
         return ServerBullet(owner, *data)
 
     def update(self, timedelta: int) -> None:
+        self.vy += self.ay
         self.current_lifetime_seconds += timedelta
         self.x += self.vx * timedelta
         self.y += self.vy * timedelta
@@ -134,6 +135,8 @@ class ServerWeapon:
     def __init__(self, name, x, y):
         self.owner = None
         self.name = name
+        self.vy = 0
+
         self.ammo = Weapon.all_weapons_info[self.name]['PATRONS']
 
         weapon_rect_height = Weapon.all_weapons_info[name]['WEAPON_RECT_HEIGHT']
@@ -150,8 +153,23 @@ class ServerWeapon:
                                 weapon_rect_width, weapon_rect_height)
         self.direction = 'right'
 
-    def update(self):
-        pass
+    def update(self, time_delta, level):
+        time_delta = min(1 / 20, time_delta)
+        if self.owner:
+            owner = game_state.players[self.owner]
+            self.direction = owner.direction
+            self.rect.x = owner.x + Weapon.all_weapons_info[self.name][f'OFFSET_X_{self.direction.upper()}']
+            self.rect.y = owner.y + Weapon.all_weapons_info[self.name]['OFFSET_Y']
+        else:
+            dvy = 128
+            dy = int(time_delta * self.vy)
+            self.rect.y += dy
+            if level.collide_point(*self.get_center()):
+                self.rect.y -= dy
+                self.vy = 0
+            else:
+                self.vy += dvy
+                self.vy = min(self.vy, 1024)
 
     def get_center(self) -> tuple[int, int]:
         if self.direction == 'right':
@@ -170,7 +188,7 @@ class GameState:
     STATUS_WAIT = 1
     STATUS_CONNECTED = 2
     STATUS_PLAYING = 3
-    MAX_LEVELS = 2
+    MAX_LEVELS = 10
 
     def __init__(self):
         self.level_id = 0
@@ -264,21 +282,20 @@ async def accept_connection(reader: asyncio.StreamReader, writer: asyncio.Stream
 
 
 async def disconnect(client_id: int):
-    async with lock:
-        reader, writer = id_to_stream[client_id]
-        client_id = client_socket_to_id[(reader, writer)]
+    reader, writer = id_to_stream[client_id]
+    client_id = client_socket_to_id[(reader, writer)]
 
-        if client_id in game_state.players_alive:
-            game_state.players[client_id].death()
-        if client_id in game_state.players.keys():
-            game_state.players.pop(client_id)
-            id_to_stream.pop(client_id)
-            id_to_udp_address.pop(client_id)
-            id_to_last_udp_packet_time.pop(client_id)
-            client_socket_to_id.pop((reader, writer))
-        writer.close()
-        await writer.wait_closed()
-        print(f'client with id {client_id} disconnected')
+    if client_id in game_state.players_alive:
+        game_state.players[client_id].death()
+    if client_id in game_state.players.keys():
+        game_state.players.pop(client_id)
+        id_to_stream.pop(client_id)
+        id_to_udp_address.pop(client_id)
+        id_to_last_udp_packet_time.pop(client_id)
+        client_socket_to_id.pop((reader, writer))
+    writer.close()
+    await writer.wait_closed()
+    print(f'client with id {client_id} disconnected')
 
 
 async def read(reader: asyncio.StreamReader) -> bytes:
@@ -324,24 +341,23 @@ async def end_game(n_players):
 
 
 async def change_level(level_name):
-    async with lock:
-        game_state.game_ended = False
-        game_state.change_level(level_name)
-        gen_spawn = spawn_players()
-        for player_id, spawn_pos in gen_spawn:
-            player_color = game_state.players[player_id].color
-            game_data = {'level_name': game_state.level_name, 'position': spawn_pos, 'color': player_color}
-            game_state.players[player_id].x, game_state.players[player_id].y = spawn_pos
+    game_state.game_ended = False
+    game_state.change_level(level_name)
+    gen_spawn = spawn_players()
+    for player_id, spawn_pos in gen_spawn:
+        player_color = game_state.players[player_id].color
+        game_data = {'level_name': game_state.level_name, 'position': spawn_pos, 'color': player_color}
+        game_state.players[player_id].x, game_state.players[player_id].y = spawn_pos
 
-            response = DataPacket(DataPacket.GAME_INFO, game_data)
-            if GameState.STATUS_PLAYING in game_state.players[player_id].flags:
-                game_state.players[player_id].flags.remove(GameState.STATUS_PLAYING)
+        response = DataPacket(DataPacket.GAME_INFO, game_data)
+        if GameState.STATUS_PLAYING in game_state.players[player_id].flags:
+            game_state.players[player_id].flags.remove(GameState.STATUS_PLAYING)
+        await send(player_id, response)
+
+        for weapon_id, weapon in game_state.weapons.items():
+            weapon_data = {'weapon_id': weapon_id, 'weapon_data': weapon.encode()}
+            response = DataPacket(DataPacket.NEW_WEAPON_FROM_SERVER, weapon_data)
             await send(player_id, response)
-
-            for weapon_id, weapon in game_state.weapons.items():
-                weapon_data = {'weapon_id': weapon_id, 'weapon_data': weapon.encode()}
-                response = DataPacket(DataPacket.NEW_WEAPON_FROM_SERVER, weapon_data)
-                await send(player_id, response)
 
     if game_state.lastlevel:
         await asyncio.sleep(5)
@@ -362,10 +378,9 @@ async def handle_packet(data_packet: DataPacket):
         return
 
     if data_packet.data_type == DataPacket.INITIAL_INFO:
-        async with lock:
-            data = data_packet['data']
-            game_state.players[client_id] = ServerPlayer.from_player_data(client_id, data)
-            game_state.players[client_id].flags.add(GameState.STATUS_PLAYING)
+        data = data_packet['data']
+        game_state.players[client_id] = ServerPlayer.from_player_data(client_id, data)
+        game_state.players[client_id].flags.add(GameState.STATUS_PLAYING)
 
     if data_packet.data_type == DataPacket.CLIENT_PLAYER_INFO:
         if GameState.STATUS_PLAYING in game_state.players[client_id].flags:
@@ -458,6 +473,9 @@ async def update(time_delta):
         else:
             await change_level('firstmap')
         return
+
+    for weapon_id in game_state.weapons.keys():
+        game_state.weapons[weapon_id].update(time_delta, game_state.level)
 
     # Пробегаемся по все игрокам
     for client_id in id_to_stream.keys():
