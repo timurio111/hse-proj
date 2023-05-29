@@ -5,8 +5,6 @@ import pygame
 import yaml
 from sound import load_weapon_sound
 
-pygame.mixer.init()
-
 
 def load_weapon_sprites(scale: int) -> (dict[str, list[pygame.surface.Surface]], dict[str, int]):
     path = os.path.join("data", 'WeaponSprites')
