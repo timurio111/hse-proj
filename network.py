@@ -56,10 +56,11 @@ class DataPacket:
 
 
 class Network:
-    last_udp_packet_time = 0
     start_time = int(time())
 
     def __init__(self, server, port, callback):
+        self.last_udp_packet_time = 0
+
         self.callback = callback
         self.server = server
 
@@ -94,14 +95,13 @@ class Network:
         data_packet.headers['time'] = round(time() - Network.start_time, 3)
         self.udp_client_socket.sendto(data_packet.encode(), self.udp_address)
 
-    @staticmethod
-    def read_packet(sock: socket.socket):
+    def read_packet(self, sock: socket.socket):
         if sock.type == socket.SOCK_DGRAM:
             data = sock.recv(1024)
             data_packet = DataPacket.from_bytes(data)
-            if data_packet.headers['time'] < Network.last_udp_packet_time:
+            if data_packet.headers['time'] < self.last_udp_packet_time:
                 return None
-            Network.last_udp_packet_time = data_packet.headers['time']
+            self.last_udp_packet_time = data_packet.headers['time']
             return data_packet
         else:
             data = b''
@@ -122,7 +122,7 @@ class Network:
             if not events:
                 break
             for key, mask in events:
-                data_packet = Network.read_packet(key.fileobj)
+                data_packet = self.read_packet(key.fileobj)
                 if data_packet is not None:
                     received = True
                     callback = key.data

@@ -145,7 +145,7 @@ class Weapon:
                 self.vy = 0
             else:
                 self.vy += dvy
-                self.vy = min(self.vy, 1024)
+                self.vy = min(self.vy, 512)
 
     def update_sprite(self, time_delta):
         self.animation_switch_timer += time_delta

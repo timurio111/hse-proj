@@ -11,7 +11,7 @@ from network import DataPacket
 from weapon import Weapon
 
 DEBUG = True
-TICK_RATE = 60
+TICK_RATE = 240
 POSITIONS_SEND_RATE = 120
 
 server = "127.0.0.1"
@@ -169,7 +169,7 @@ class ServerWeapon:
                 self.vy = 0
             else:
                 self.vy += dvy
-                self.vy = min(self.vy, 1024)
+                self.vy = min(self.vy, 512)
 
     def get_center(self) -> tuple[int, int]:
         if self.direction == 'right':
