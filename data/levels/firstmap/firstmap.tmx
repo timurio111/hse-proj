@@ -122,7 +122,7 @@
   <object id="11" name="spawnpoint" x="398.513" y="347.911">
    <point/>
   </object>
-  <object id="13" name="WeaponPistol" x="239.789" y="364.785">
+  <object id="13" name="WeaponRifle" x="239.789" y="364.785">
    <point/>
   </object>
   <object id="15" name="WeaponShotgun" x="238.669" y="140.525">
