@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import os
-import socket
-
 import pygame
 
 import config
@@ -328,13 +325,14 @@ class GameManager:
             return
         if self.game.player.weapon.name == "WeaponNone":
             return
-        bullet = self.game.player.weapon.shoot()
-        if bullet is None:
+        bullets = self.game.player.weapon.shoot()
+        if bullets is None:
             return
 
-        bullet_data = {'data': bullet.encode()}
-        response = self.DataPacket(self.DataPacket.NEW_SHOT_FROM_CLIENT, bullet_data)
-        self.send(response)
+        for bullet in bullets:
+            bullet_data = {'data': bullet.encode()}
+            response = self.DataPacket(self.DataPacket.NEW_SHOT_FROM_CLIENT, bullet_data)
+            self.send(response)
 
     def pick_up_weapon(self):
         response = self.DataPacket(self.DataPacket.CLIENT_PICK_WEAPON_REQUEST)

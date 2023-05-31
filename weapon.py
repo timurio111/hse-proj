@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import os
+import random
+
 import pygame
 import yaml
+
 from sound import load_weapon_sound
 
 
@@ -18,25 +21,8 @@ def load_weapon_sprites(scale: int) -> (dict[str, list[pygame.surface.Surface]],
         with open(os.path.join(path, directory, '_config.yaml'), "r") as stream:
             try:
                 data = yaml.safe_load(stream)
-                weapon_data[directory]['WEAPON_RECT_WIDTH'] = data['WEAPON_RECT_WIDTH']
-                weapon_data[directory]['WEAPON_RECT_HEIGHT'] = data['WEAPON_RECT_HEIGHT']
-                weapon_data[directory]['ARMS_RECT_WIDTH'] = data['ARMS_RECT_WIDTH']
-                weapon_data[directory]['ARMS_RECT_HEIGHT'] = data['ARMS_RECT_HEIGHT']
-                weapon_data[directory]['IMAGE_OFFSET_X'] = data['IMAGE_OFFSET_X']
-                weapon_data[directory]['IMAGE_OFFSET_Y'] = data['IMAGE_OFFSET_Y']
-                weapon_data[directory]['IMAGE_WIDTH'] = data['IMAGE_WIDTH']
-                weapon_data[directory]['IMAGE_HEIGHT'] = data['IMAGE_HEIGHT']
-                weapon_data[directory]['OFFSET_X_LEFT'] = data['OFFSET_X_LEFT']
-                weapon_data[directory]['OFFSET_X_RIGHT'] = data['OFFSET_X_RIGHT']
-                weapon_data[directory]['OFFSET_Y'] = data['OFFSET_Y']
-                weapon_data[directory]['BULLET_SPEED'] = data['BUlLET_SPEED']
-                weapon_data[directory]['BULLET_DAMAGE'] = data['BULLET_DAMAGE']
-                weapon_data[directory]['BULLET_Y_ACCELERATION'] = data['BULLET_Y_ACCELERATION']
-                weapon_data[directory]['PATRONS'] = data['PATRONS']
-                weapon_data[directory]['RELOAD_T'] = data['RELOAD_T']
-                weapon_data[directory]['BARREL_OFFSET_X'] = data['BARREL_OFFSET_X']
-                weapon_data[directory]['BARREL_OFFSET_Y'] = data['BARREL_OFFSET_Y']
-                weapon_data[directory]['FRAME_RATE'] = data['FRAME_RATE']
+                for key, value in data.items():
+                    weapon_data[directory][key] = value
             except yaml.YAMLError as exc:
                 print(exc)
         for filename in os.listdir(os.path.join(path, directory)):
@@ -126,9 +112,22 @@ class Weapon:
         self.status = 'shoot'
         self.sprite_number = 0
 
-        speed_x = (1 if self.direction == 'right' else -1) * Weapon.all_weapons_info[self.name]['BULLET_SPEED']
-        ay = Weapon.all_weapons_info[self.name]['BULLET_Y_ACCELERATION']
-        return Bullet(self.get_barrel_position(), (speed_x, 0), self.damage, ay)
+        spread = 0
+        if 'BULLETS_SPREAD' in Weapon.all_weapons_info[self.name].keys():
+            spread = Weapon.all_weapons_info[self.name]['BULLETS_SPREAD']
+
+        bullets_count = 1
+        if 'BULLETS_COUNT' in Weapon.all_weapons_info[self.name].keys():
+            bullets_count = Weapon.all_weapons_info[self.name]['BULLETS_COUNT']
+
+        bullets = []
+        for _ in range(bullets_count):
+            speed = Weapon.all_weapons_info[self.name]['BULLET_SPEED']
+            speed_y = random.uniform(-spread, spread) * speed
+            speed_x = int((speed ** 2 - speed_y ** 2) ** 0.5) * (1 if self.direction == 'right' else -1)
+            ay = Weapon.all_weapons_info[self.name]['BULLET_Y_ACCELERATION']
+            bullets.append(Bullet(self.get_barrel_position(), (speed_x, speed_y), self.damage, ay))
+        return bullets
 
     def update(self, time_delta, level):
         time_delta = min(1 / 20, time_delta)
