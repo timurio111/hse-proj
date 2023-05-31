@@ -121,3 +121,75 @@ class Button:
             self.pressed = False
             self.hover = False
             self.is_hover_sound_played = False
+
+
+class Slider:
+    def __init__(self, size, pos, slider_color=(255, 255, 255), bar_color=(0, 0, 0), event=None):
+        self.width, self.height = size
+        self.x, self.y = pos
+        self.slider_color = slider_color
+        self.bar_color = bar_color
+        self.event = event
+
+        self.pressed = False
+
+        self.slider_pos = 0
+        self.slider_radius = self.height // 2
+        self.image = self.__get_image()
+
+    def __get_image(self):
+        frame = pygame.Surface((self.width + self.slider_radius * 2, self.height), pygame.SRCALPHA)
+        line = pygame.Surface((self.width + self.slider_radius * 2, 4))
+        line.fill(self.bar_color)
+        frame.blit(line, (0, self.height // 2))
+        return frame
+
+    def draw(self, screen: pygame.Surface):
+        screen.blit(self.image, (self.x - self.slider_radius, self.y))
+        pygame.draw.circle(screen, self.slider_color, (self.x + self.width * self.slider_pos, self.y + self.height // 2), self.slider_radius)
+
+    def get_value(self):
+        return self.slider_pos
+
+    def event_handle(self, event: pygame.event.Event):
+        if event.type == pygame.MOUSEMOTION:
+            if not self.pressed:
+                return
+            x, y = event.pos
+            dx = min(max(0, x - self.x), self.width)
+            self.slider_pos = dx / self.width
+            if self.event is not None:
+                self.event.dict['value'] = self.slider_pos
+                pygame.event.post(self.event)
+
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            point = self.x + self.width * self.slider_pos, self.y + self.height // 2
+            dist = pygame.math.Vector2(point).distance_to(event.pos)
+            if dist < self.slider_radius:
+                self.pressed = True
+
+        if event.type == pygame.MOUSEBUTTONUP:
+            self.pressed = False
+
+
+class TextBox:
+    def __init__(self, size, pos, text="", font=None, text_color=(200, 200, 200)):
+        self.x, self.y = pos
+        self.width, self.height = size
+        self.font = pygame.font.Font(font, self.height)
+        self.text = text
+        self.text_color = text_color
+        self.image = self.__get_image()
+
+    def __get_image(self) -> pygame.Surface:
+        frame = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+
+        text_surf = self.font.render(self.text, True, self.text_color)
+        factor = 1 / max(text_surf.get_width() / self.width, text_surf.get_height() / self.height)
+        text_surf = pygame.transform.scale_by(text_surf, factor)
+        frame.blit(text_surf, (self.width // 2 - text_surf.get_width() // 2,
+                               self.height // 2 - text_surf.get_height() // 2))
+        return frame
+
+    def draw(self, screen: pygame.Surface):
+        screen.blit(self.image, (self.x, self.y))
