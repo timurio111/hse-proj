@@ -1,7 +1,12 @@
 import pygame
 import pyperclip
-import os
 from sound import SoundCore
+from weapon import Weapon
+from config import WIDTH, HEIGHT
+
+RED = (255, 0, 0)
+GRAY = (125, 125, 125)
+YELLOW = (255, 255, 0)
 
 
 class TextInput:
@@ -193,3 +198,59 @@ class TextBox:
 
     def draw(self, screen: pygame.Surface):
         screen.blit(self.image, (self.x, self.y))
+
+
+class Bar:
+    BAR_SIZE = (100, 10)
+    BAR_THICKNESS = 2
+
+    def __init__(self, x, y, cur_value, max_value, color):
+        self.bar_background = pygame.rect.Rect((x, y, Bar.BAR_SIZE[0], Bar.BAR_SIZE[1]))
+        self.bar = pygame.rect.Rect((x, y, Bar.BAR_SIZE[0] * cur_value/max_value, Bar.BAR_SIZE[1]))
+        self.color = color
+        self.current_value = cur_value
+
+    def update(self, change):
+        self.current_value -= change['delta']
+
+    def draw(self, screen: pygame.Surface):
+        pygame.draw.rect(screen, self.color, self.bar_background, Bar.BAR_THICKNESS)
+        pygame.draw.rect(screen, self.color, self.bar)
+
+
+class HpBar(Bar):
+    MAX_HP = 100
+    HP_BAR_COORD = (1, 1)
+    YELLOW_MARK = 60
+    RED_MARK = 30
+
+    def __init__(self, cur_hp):
+        Bar.__init__(self, HpBar.HP_BAR_COORD[0], HpBar.HP_BAR_COORD[1], cur_hp, HpBar.MAX_HP, RED)
+
+    def update(self, change):
+        super().update(change)
+        if HpBar.RED_MARK < self.current_value <= HpBar.YELLOW_MARK:
+            self.color = YELLOW
+        elif self.current_value < HpBar.RED_MARK:
+            self.color = RED
+
+
+class AmmoBar(Bar):
+    AMMO_BAR_COORD = (21, 21)
+
+    def __init__(self, left_ammo, max_ammo):
+        Bar.__init__(self, AmmoBar.AMMO_BAR_COORD[0], AmmoBar.AMMO_BAR_COORD[1], left_ammo, max_ammo, GRAY)
+
+
+class OwnStat:
+    def __init__(self, player_data):
+        self.held_weapon = player_data['weapon']
+        self.max_ammo = Weapon.all_weapons_info[self.held_weapon]['PATRONS']
+        self.left_ammo = player_data['left_ammo']
+        self.current_hp = player_data['hp']
+        self.ammo_bar = AmmoBar(self.left_ammo, self.max_ammo)
+        self.hp_bar = HpBar(self.current_hp)
+
+    def draw(self, screen : pygame.Surface):
+        self.ammo_bar.draw(screen)
+        self.hp_bar.draw(screen)
