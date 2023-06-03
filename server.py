@@ -96,6 +96,8 @@ class ServerPlayer:
             game_statistics[bullet.owner]['kill'] += 1
 
     def death(self):
+        if self.id not in game_state.players_alive:
+            return
         self.hp = 0
         game_statistics[self.id]['death'] += 1
         game_state.players_alive.remove(self.id)

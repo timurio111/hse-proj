@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.9" tiledversion="1.9.2" orientation="orthogonal" renderorder="right-down" width="30" height="30" tilewidth="16" tileheight="16" infinite="0" nextlayerid="5" nextobjectid="17">
+<map version="1.9" tiledversion="1.9.2" orientation="orthogonal" renderorder="right-down" width="30" height="30" tilewidth="16" tileheight="16" infinite="0" nextlayerid="5" nextobjectid="23">
  <properties>
   <property name="Scale" type="int" value="1"/>
  </properties>
- <tileset firstgid="1" source="./testset.tsx"/>
+ <tileset firstgid="1" source="testset.tsx"/>
  <layer id="3" name="Фон" width="30" height="30">
   <properties>
    <property name="Collision" type="bool" value="false"/>
@@ -91,12 +91,12 @@
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+5,5,5,5,5,5,5,5,5,5,0,0,0,0,0,0,0,0,0,0,5,5,5,5,5,5,5,5,5,5,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,18,20,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,18,20,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,18,20,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-0,0,0,0,0,0,5,5,5,0,0,0,0,0,18,20,0,0,0,0,0,5,5,5,0,0,0,0,0,0,
+0,0,0,0,0,0,5,5,5,0,0,0,0,5,18,20,5,0,0,0,0,5,5,5,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,18,20,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,2,4,0,0,0,0,0,0,0,0,0,0,0,18,20,0,0,0,0,0,0,0,0,0,0,0,2,4,0,
 0,18,20,0,0,0,0,0,0,0,0,0,0,0,18,20,0,0,0,0,0,0,0,0,0,0,0,18,20,0,
@@ -116,16 +116,34 @@
 </data>
  </layer>
  <objectgroup id="4" name="Слой объектов 1">
-  <object id="9" name="spawnpoint" x="74.9826" y="349.571">
+  <object id="9" name="spawnpoint" x="124.466" y="204.927">
    <point/>
   </object>
-  <object id="11" name="spawnpoint" x="398.513" y="347.911">
+  <object id="11" name="spawnpoint" x="362.624" y="204.898">
    <point/>
   </object>
-  <object id="13" name="WeaponRifle" x="239.789" y="364.785">
+  <object id="13" name="WeaponRifle" x="243.804" y="427.686">
    <point/>
   </object>
   <object id="15" name="WeaponShotgun" x="238.669" y="140.525">
+   <point/>
+  </object>
+  <object id="17" name="WeaponRifle" x="31.5389" y="119.63">
+   <point/>
+  </object>
+  <object id="18" name="WeaponRifle" x="444.807" y="120.718">
+   <point/>
+  </object>
+  <object id="19" name="WeaponPistol" x="282.762" y="359.978">
+   <point/>
+  </object>
+  <object id="20" name="WeaponPistol" x="196.302" y="361.066">
+   <point/>
+  </object>
+  <object id="21" name="spawnpoint" x="68.5155" y="347.471">
+   <point/>
+  </object>
+  <object id="22" name="spawnpoint" x="406.743" y="345.296">
    <point/>
   </object>
  </objectgroup>
