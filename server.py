@@ -67,6 +67,7 @@ class ServerPlayer:
         self.sprite_offset_y: int = self.ch_data['RECT_HEIGHT'] - self.ch_data['CHARACTER_HEIGHT']
         self.sprite_rect = pygame.Rect((self.x + self.sprite_offset_x, self.y + self.sprite_offset_y),
                                        (ch_data['CHARACTER_WIDTH'], ch_data['CHARACTER_HEIGHT']))
+        self.weapon_id = -1
         self.color = color
         self.flags: set[int] = set()
 
@@ -155,6 +156,8 @@ class ServerWeapon:
 
     def update(self, time_delta, level):
         time_delta = min(1 / 20, time_delta)
+        if self.owner not in game_state.players_alive:
+            self.owner = None
         if self.owner:
             owner = game_state.players[self.owner]
             self.direction = owner.direction
@@ -178,7 +181,8 @@ class ServerWeapon:
             return self.rect.right - self.center_offset_x, self.rect.y + self.bottom_offset_y
 
     def pick_up(self, player_id):
-        pass
+        self.owner = player_id
+        game_state.players[player_id].weapon_id = self.weapon_id
 
     def encode(self):
         return [self.name, self.rect.x, self.rect.y, self.ammo]
@@ -514,6 +518,26 @@ async def update(time_delta):
 
             if game_state.players[client_id].sprite_rect.collidepoint(bullet.get_position()):
                 game_state.players[client_id].take_damage(bullet)
+
+                if game_state.players[client_id].hp <= 0:
+                    weapon_id = game_state.players[client_id].weapon_id
+                    if weapon_id != -1:
+                        weapon = game_state.weapons[weapon_id]
+                        weapon_direction = weapon.direction
+                        weapon_position = weapon.get_center()
+                        weapon_ammo = weapon.ammo
+                        game_state.weapons[weapon_id].owner = None
+                        game_state.weapons[weapon_id].rect.x, game_state.weapons[weapon_id].rect.y = weapon_position
+                        game_state.weapons[weapon_id].direction = weapon_direction
+                        response = DataPacket(DataPacket.CLIENT_DROPPED_WEAPON,
+                                              {'owner_id': client_id,
+                                               'weapon_id': weapon_id,
+                                               'weapon_position': weapon_position,
+                                               'weapon_direction': weapon_direction,
+                                               'weapon_ammo': weapon_ammo})
+                        for client_id in id_to_stream.keys():
+                            await send(client_id, response)
+
                 data_packet = DataPacket(DataPacket.HEALTH_POINTS, game_state.players[client_id].hp)
                 await send(client_id, data_packet)
                 await delete_bullet(bullet_id)

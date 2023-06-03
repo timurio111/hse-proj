@@ -411,7 +411,7 @@ def main(screen):
                 break
 
             if event.type == pygame.KEYDOWN:
-                if game_manager.game_started:
+                if game_manager.game_started and game_manager.game.player.hp > 0:
                     if event.key == pygame.K_j:
                         if game_manager.game.player.weapon.name == 'WeaponNone':
                             game_manager.pick_up_weapon()
