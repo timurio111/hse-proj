@@ -17,7 +17,7 @@ conn, addr = s.accept()
 
 frames_counter = 0
 frames_counter_global = 0
-model = YOLO('./runs/classify/train5/weights/last.pt')  # load a custom model
+model = YOLO('./runs/classify/train7/weights/last.pt')  # load a custom model
 cap = cv2.VideoCapture(0)
 while cap.isOpened():
     ret, frame = cap.read()
