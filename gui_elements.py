@@ -1,7 +1,8 @@
 import pygame
 import pyperclip
-import os
 from sound import SoundCore
+from weapon import Weapon
+from config import WIDTH, HEIGHT
 
 
 class TextInput:
@@ -193,3 +194,30 @@ class TextBox:
 
     def draw(self, screen: pygame.Surface):
         screen.blit(self.image, (self.x, self.y))
+
+
+class HpBar:
+    MAX_HP = 100
+    OWNER_HP_BAR = ()
+    OWNER
+
+
+    def __init__(self, current_hp):
+        self.current_hp = current_hp
+        self.bar = pygame.rect(HpBar.OWNER_BAR)
+
+
+
+
+class OwnStat:
+    def __init__(self, player_data, player_id):
+        self.player = player_data
+        self.payer_id = self.player['id']
+        self.held_weapon = self.player['weapon']
+        self.max_ammo = Weapon.all_weapons_info[self.held_weapon]
+        self.left_ammo = self.player['left_ammo']
+        self.current_hp = self.player['hp']
+
+    def draw(self):
+
+
