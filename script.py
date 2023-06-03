@@ -11,6 +11,7 @@ PORT = 5557
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.bind((HOST, PORT))
 s.listen(1)
+print('waiting')
 conn, addr = s.accept()
 
 
@@ -22,9 +23,11 @@ while cap.isOpened():
     ret, frame = cap.read()
     results = model(frame, verbose=False)
     names_dict = results[0].names
-    probs = results[0].probs.tolist()
-    current_status = names_dict[np.argmax(probs)]
-    # print(current_status)
+    hands_up = float(results[0].probs.data[0])
+    current_status = 'normal'
+    print(f'hands_up confidence: {hands_up}')
+    if hands_up > 0.3:
+        current_status = 'debuffed'
     if current_status == 'debuffed':
         frames_counter += 1
     if frames_counter > 0:
@@ -34,6 +37,7 @@ while cap.isOpened():
             response = DataPacket(DataPacket.WEBCAM_RESPONSE)
             response['data'] = 'hands up'
             response.headers['game_id'] = -1
+            conn.send(response.encode())
         frames_counter = 0
         frames_counter_global = 0
     cv2.imshow('YOLO', frame)

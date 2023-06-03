@@ -79,10 +79,13 @@ class Network:
 
         self.udp_client_socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
+        self.tcp_local_socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.tcp_local_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
         self.sel = selectors.DefaultSelector()
         self.sel.register(self.tcp_client_socket, selectors.EVENT_READ, self.callback)
         self.sel.register(self.udp_client_socket, selectors.EVENT_READ, self.callback)
-        self.sel.register(self.udp_client_socket, selectors.EVENT_READ, self.callback)
+        self.sel.register(self.tcp_local_socket, selectors.EVENT_READ, self.callback)
 
         self.id = -1
 
@@ -92,6 +95,7 @@ class Network:
     def authorize(self):
         self.tcp_client_socket.settimeout(5)
         self.tcp_client_socket.connect(self.tcp_address)
+        self.tcp_local_socket.connect(self.local_tcp_address)
 
     def send_tcp(self, data_packet: DataPacket):
         self.tcp_client_socket.send(data_packet.encode())
