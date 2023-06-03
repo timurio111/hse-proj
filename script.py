@@ -1,10 +1,17 @@
 from ultralytics import YOLO
 import numpy as np
 import cv2
+from network import DataPacket
+import socket
 
 
-def send_socket():
-    print('zalypa')
+HOST = '127.0.0.1'
+PORT = 5557
+
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind((HOST, PORT))
+s.listen(1)
+conn, addr = s.accept()
 
 
 frames_counter = 0
@@ -24,7 +31,9 @@ while cap.isOpened():
         frames_counter_global += 1
     if frames_counter_global == 48:
         if frames_counter >= 40:
-            send_socket()
+            response = DataPacket(DataPacket.WEBCAM_RESPONSE)
+            response['data'] = 'hands up'
+            response.headers['game_id'] = -1
         frames_counter = 0
         frames_counter_global = 0
     cv2.imshow('YOLO', frame)

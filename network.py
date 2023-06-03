@@ -25,6 +25,7 @@ class DataPacket:
     CLIENT_DROPPED_WEAPON = 16
     CLIENT_PICK_WEAPON_REQUEST = 17
     GAME_ALREADY_STARTED = 18
+    WEBCAM_RESPONSE = 19
 
     FLAG_READY = 100
 
@@ -70,6 +71,9 @@ class Network:
         self.udp_port = port + 1
         self.udp_address = (self.server, self.udp_port)
 
+        self.local_tcp_port = port + 2
+        self.local_tcp_address = ('localhost', self.local_tcp_port)
+
         self.tcp_client_socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.tcp_client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
@@ -77,6 +81,7 @@ class Network:
 
         self.sel = selectors.DefaultSelector()
         self.sel.register(self.tcp_client_socket, selectors.EVENT_READ, self.callback)
+        self.sel.register(self.udp_client_socket, selectors.EVENT_READ, self.callback)
         self.sel.register(self.udp_client_socket, selectors.EVENT_READ, self.callback)
 
         self.id = -1

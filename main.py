@@ -223,6 +223,11 @@ class GameManager:
     def callback(self, data_packet: DataPacket, mask):
         game_id = data_packet.headers['game_id']
 
+        if data_packet.data_type == self.DataPacket.WEBCAM_RESPONSE:
+            data = data_packet['data']
+            if data == 'hands up':
+                self.game.player.jump()
+
         if data_packet.data_type == self.DataPacket.AUTH:
             self.network.id = data_packet.data['id']
 
