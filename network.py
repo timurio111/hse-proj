@@ -26,6 +26,8 @@ class DataPacket:
     CLIENT_PICK_WEAPON_REQUEST = 17
     GAME_ALREADY_STARTED = 18
     WEBCAM_RESPONSE = 19
+    WEBCAM_EXCEPTION = 20
+    WEBCAM_READY = 21
 
     FLAG_READY = 100
 
@@ -93,9 +95,19 @@ class Network:
         self.tcp_client_socket.close()
 
     def authorize(self):
-        self.tcp_client_socket.settimeout(5)
-        self.tcp_client_socket.connect(self.tcp_address)
-        self.tcp_local_socket.connect(self.local_tcp_address)
+        try:
+            self.tcp_local_socket.connect(self.local_tcp_address)
+        except Exception as e:
+            print(e)
+            raise Exception('Failed to connect to the webcam')
+
+        try:
+            self.tcp_client_socket.settimeout(5)
+            self.tcp_client_socket.connect(self.tcp_address)
+        except Exception as e:
+            print(e)
+            raise Exception('Failed to connect to the server')
+
 
     def send_tcp(self, data_packet: DataPacket):
         self.tcp_client_socket.send(data_packet.encode())

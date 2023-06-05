@@ -1,7 +1,7 @@
 task: classify
 mode: train
 model: yolov8n-cls.pt
-data: /data/collected_pics
+data: projects/hse-proj/data/CollectedPics
 epochs: 100
 patience: 50
 batch: 16
@@ -92,4 +92,4 @@ copy_paste: 0.0
 cfg: null
 v5loader: false
 tracker: botsort.yaml
-save_dir: C:\projects\hse-proj\runs\classify\train
+save_dir: C:\projects\hse-proj\runs\classify\train2

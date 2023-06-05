@@ -5,6 +5,7 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 import torchvision.utils
 from tqdm import tqdm
+import uuid
 
 
 def augmentation(data_class: str, label: str, pics_amount: int):
@@ -36,6 +37,6 @@ def augmentation(data_class: str, label: str, pics_amount: int):
         image = np.array(image)
         for i in tqdm(range(pics_amount)):
             augmentations = transform(image=image)
-            new_filename = filename[:-4] + str(i) + filename[len(filename) - 4:]
+            new_filename = str(uuid.uuid1()) + filename[:-4] + str(i) + filename[len(filename) - 4:]
             augmented_filename = './data/collected_pics/{0}/augmented/{1}/{2}'.format(data_class, label, new_filename)
             torchvision.utils.save_image(augmentations['image'], augmented_filename)

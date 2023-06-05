@@ -2,10 +2,10 @@ import cv2
 import time
 import uuid
 import os
-from augmentation import augmentation
+from ml.Scripts.augmentation import augmentation
 
 PICS_AMOUNT = 50
-PICS_PATH = os.path.join('pics', 'collected_pics')
+PICS_PATH = os.path.join('pics', '../../data/CollectedPics')
 
 LABELS = ['debuffed', 'normal']
 
