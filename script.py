@@ -1,5 +1,4 @@
 from ultralytics import YOLO
-import numpy as np
 import cv2
 from network import DataPacket
 import socket
@@ -18,7 +17,7 @@ conn, addr = s.accept()
 
 frames_counter = 0
 frames_counter_global = 0
-model = YOLO('./runs/classify/train7/weights/last.pt')  # load a custom model
+model = YOLO('runs/classify/recommended_to_use/weights/best.pt')  # load a custom model
 cap = cv2.VideoCapture(0)
 while cap.isOpened():
     ret, frame = cap.read()
@@ -27,7 +26,7 @@ while cap.isOpened():
     hands_up = float(results[0].probs.data[0])
     current_status = 'normal'
     print(f'hands_up confidence: {hands_up}')
-    if hands_up > 0.3:
+    if hands_up > 0.85:
         current_status = 'debuffed'
     if current_status == 'debuffed':
         frames_counter += 1
