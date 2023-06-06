@@ -684,8 +684,6 @@ class GameSession:
                 if GameState.STATUS_PLAYING not in self.game_state.players[client_id].flags:
                     continue
                 self.kill_player(client_id)
-                data_packet = DataPacket(DataPacket.HEALTH_POINTS, self.game_state.players[client_id].hp)
-                self.send_packet_tcp(client_id, data_packet)
 
         for bullet_id in list(self.game_state.bullets.keys()):
             bullet = self.game_state.bullets[bullet_id]
@@ -705,8 +703,6 @@ class GameSession:
                 if self.game_state.players[client_id].sprite_rect.collidepoint(bullet.get_position()):
                     self.damage_player(client_id, bullet)
 
-                    response = DataPacket(DataPacket.HEALTH_POINTS, self.game_state.players[client_id].hp)
-                    self.send_packet_tcp(client_id, response)
                     self.delete_bullet(bullet_id)
 
     def delete_bullet(self, bullet_id):
@@ -720,6 +716,10 @@ class GameSession:
         damage = min(bullet.damage, player.hp)
         self.game_statistics[bullet.owner]['damage'] += damage
         player.hp -= damage
+
+        response = DataPacket(DataPacket.HEALTH_POINTS, self.game_state.players[player_id].hp)
+        self.send_packet_tcp(player_id, response)
+
         if player.hp == 0:
             self.game_statistics[bullet.owner]['kill'] += 1
             self.kill_player(player_id)
@@ -727,6 +727,10 @@ class GameSession:
     def kill_player(self, player_id):
         self.game_statistics[player_id]['death'] += 1
         self.game_state.players_alive.remove(player_id)
+        self.game_state.players[player_id].hp = 0
+
+        data_packet = DataPacket(DataPacket.HEALTH_POINTS, 0)
+        self.send_packet_tcp(player_id, data_packet)
 
         weapon_id = self.game_state.players[player_id].weapon_id
         if weapon_id != -1:
