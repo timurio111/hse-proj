@@ -17,7 +17,7 @@ def raise_exception(exception_message):
     conn.send(response.encode())
 
 
-model = YOLO('ml/Models/classify/recommended_to_use/weights/best.pt')
+model = YOLO('ml/Models/classify/train11/weights/best.pt')
 cap = cv2.VideoCapture(0)
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -34,15 +34,10 @@ response.headers['game_id'] = -1
 conn.send(response.encode())
 
 frames_counter = 0
-start_time = 0
-delta_time = 0
-delta_start = 0
-delta_end = 0
-flag = False
+cooldown = 0
+current_time = 0
 
 while cap.isOpened():
-    if not flag:
-        delta_start = time.time()
     try:
         ret, frame = cap.read()
     except Exception as e:
@@ -55,31 +50,26 @@ while cap.isOpened():
     print(f'hands_up confidence: {hands_up}')
     if hands_up >= 0.85:
         current_status = 'debuffed'
-    if current_status == 'debuffed':
-        if start_time == 0:
-            start_time = time.time()
-        frames_counter += 1
     current_time = time.time()
-    if start_time != 0 and current_time - start_time >= 2:
-        if frames_counter >= 2 * (
-                1 / delta_time) * 0.8:  # TODO подобрать константу, чтобы учесть лосс + плавучесть дельты
-            response = DataPacket(DataPacket.WEBCAM_RESPONSE)
-            response['data'] = 'hands up'
-            response.headers['game_id'] = -1
-            conn.send(response.encode())
+    if current_status == 'debuffed' and (current_time - cooldown) >= 3:
+        frames_counter += 1
+    if frames_counter >= 25:
+        response = DataPacket(DataPacket.WEBCAM_RESPONSE)
+        print(f'FRAMES: {frames_counter}')
+        response['data'] = 'hands up'
+        response.headers['game_id'] = -1
+        conn.send(response.encode())
         frames_counter = 0
-        start_time = 0
+        cooldown = time.time()
     try:
+        frame = cv2.resize(frame, (320, 200))
         cv2.imshow('Cam', frame)
     except Exception as e:
         raise_exception(str(e))
         break
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
-    if not flag:
-        delta_end = time.time()
-        delta_time = delta_end - delta_start
-        flag = True
+    cv2.waitKey(45)
 cap.release()
 cv2.destroyAllWindows()
 raise_exception('Webcam exception')
