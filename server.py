@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from random import shuffle
+from random import shuffle, choice
 
 import pygame
 
@@ -20,6 +20,8 @@ tcp_port = 5555
 udp_port = tcp_port + 1
 
 start_time = int(time.time())
+
+level_names = ['firstmap', 'pirate_island_map']
 
 
 class GameStatistics:
@@ -650,8 +652,9 @@ class GameSession:
                 and not self.game_state.game_ended and len(self.game_state.players) > 1:
             self.game_state.game_ended = True
             self.game_state.game_started = True
+            level_name = choice(level_names)
             server_event = ServerEvent(event_type=ServerEvent.CHANGE_LEVEL,
-                                       data={'level_name': 'firstmap'},
+                                       data={'level_name': level_name},
                                        delay=2)
             self.events_queue.put_nowait(server_event)
             return
@@ -667,8 +670,9 @@ class GameSession:
                                            delay=1)
                 self.events_queue.put_nowait(server_event)
             else:
+                level_name = choice(level_names)
                 server_event = ServerEvent(event_type=ServerEvent.CHANGE_LEVEL,
-                                           data={'level_name': 'firstmap'},
+                                           data={'level_name': level_name},
                                            delay=1)
                 self.events_queue.put_nowait(server_event)
             return
