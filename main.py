@@ -104,6 +104,7 @@ class Game:
         self.player.loop(time_delta)
         self.input_handle(time_delta)
         self.camera.update(time_delta)
+        self.level.update(time_delta)
 
         for weapon_id, weapon in self.weapons.items():
             weapon.update(time_delta, self.level)
@@ -190,7 +191,6 @@ class Game:
         for tile in collided:
             lowest_point = max(lowest_point, tile.rect.bottom)
             highest_point = min(highest_point, tile.rect.top)
-
         if player.vy > 0:
             player.set_bottom(highest_point)
             player.touch_down()

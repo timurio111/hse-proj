@@ -155,7 +155,7 @@ class Player:
             return
         if self.jump_counter == 0:
             self.off_ground_counter = 0
-            self.vy = -600
+            self.vy = -650
             self.jump_counter += 1
 
     def touch_down(self):
