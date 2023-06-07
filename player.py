@@ -204,7 +204,8 @@ class Player:
 
     def draw(self, screen, offset_x, offset_y):
         screen.blit(self.sprite, (self.rect.x + offset_x, self.rect.y + offset_y))
-        self.weapon.draw(screen, offset_x, offset_y)
+        if self.hp > 0:
+            self.weapon.draw(screen, offset_x, offset_y)
 
     def encode(self):
         return [self.rect.x, self.rect.y, self.status, self.direction, round(self.sprite_animation_counter, 2),
