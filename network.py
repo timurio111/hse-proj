@@ -25,6 +25,9 @@ class DataPacket:
     CLIENT_DROPPED_WEAPON = 16
     CLIENT_PICK_WEAPON_REQUEST = 17
     GAME_ALREADY_STARTED = 18
+    WEBCAM_RESPONSE = 19
+    WEBCAM_EXCEPTION = 20
+    WEBCAM_READY = 21
 
     FLAG_READY = 100
 
@@ -70,14 +73,21 @@ class Network:
         self.udp_port = port + 1
         self.udp_address = (self.server, self.udp_port)
 
+        self.local_tcp_port = port + 2
+        self.local_tcp_address = ('localhost', self.local_tcp_port)
+
         self.tcp_client_socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.tcp_client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
         self.udp_client_socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
+        self.tcp_local_socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.tcp_local_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
         self.sel = selectors.DefaultSelector()
         self.sel.register(self.tcp_client_socket, selectors.EVENT_READ, self.callback)
         self.sel.register(self.udp_client_socket, selectors.EVENT_READ, self.callback)
+        self.sel.register(self.tcp_local_socket, selectors.EVENT_READ, self.callback)
 
         self.id = -1
 
@@ -85,8 +95,19 @@ class Network:
         self.tcp_client_socket.close()
 
     def authorize(self):
-        self.tcp_client_socket.settimeout(5)
-        self.tcp_client_socket.connect(self.tcp_address)
+        try:
+            self.tcp_local_socket.connect(self.local_tcp_address)
+        except Exception as e:
+            print(e)
+            raise Exception('Failed to connect to the webcam')
+
+        try:
+            self.tcp_client_socket.settimeout(5)
+            self.tcp_client_socket.connect(self.tcp_address)
+        except Exception as e:
+            print(e)
+            raise Exception('Failed to connect to the server')
+
 
     def send_tcp(self, data_packet: DataPacket):
         self.tcp_client_socket.send(data_packet.encode())
