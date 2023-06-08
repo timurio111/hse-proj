@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-results_path = './runs/classify/recommended_to_use/results.csv'
+results_path = './runs/classify/recommended_to_use/results.csv'  # paste your path here
 
 results = pd.read_csv(results_path)
 

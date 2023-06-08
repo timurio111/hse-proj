@@ -43,6 +43,7 @@ while cap.isOpened():
     except Exception as e:
         raise_exception(str(e))
         break
+
     results = model(frame, verbose=False)
     names_dict = results[0].names
     hands_up = float(results[0].probs.data[0])
@@ -50,6 +51,7 @@ while cap.isOpened():
     print(f'hands_up confidence: {hands_up}')
     if hands_up >= 0.85:
         current_status = 'debuffed'
+
     current_time = time.time()
     if current_status == 'debuffed' and (current_time - cooldown) >= 3:
         frames_counter += 1
@@ -61,15 +63,18 @@ while cap.isOpened():
         conn.send(response.encode())
         frames_counter = 0
         cooldown = time.time()
+
     try:
         frame = cv2.resize(frame, (320, 200))
         cv2.imshow('Cam', frame)
     except Exception as e:
         raise_exception(str(e))
         break
+
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
     cv2.waitKey(45)
+
 cap.release()
 cv2.destroyAllWindows()
 raise_exception('Webcam exception')

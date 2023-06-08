@@ -31,12 +31,13 @@ def augmentation(data_class: str, label: str, pics_amount: int):
         ]
     )
 
-    folder = os.path.join('data', 'collected_pics', data_class, label)
+    folder = os.path.join('data', 'collected_pics', data_class, label)  # paste your path here
     for filename in os.listdir(folder):
         image = cv2.imread(os.path.join(folder, filename))
         image = np.array(image)
         for i in tqdm(range(pics_amount)):
             augmentations = transform(image=image)
             new_filename = str(uuid.uuid1()) + filename[:-4] + str(i) + filename[len(filename) - 4:]
-            augmented_filename = './data/collected_pics/{0}/augmented/{1}/{2}'.format(data_class, label, new_filename)
+            augmented_filename = './data/collected_pics/{0}/augmented/{1}/{2}'.format(data_class, label,
+                                                                                      new_filename)  # paste your path here
             torchvision.utils.save_image(augmentations['image'], augmented_filename)
