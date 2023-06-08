@@ -5,7 +5,7 @@ import pygame.event
 
 from config import WIDTH, HEIGHT
 from event_codes import *
-from gui_elements import Button, TextInput
+from gui_elements import Button, TextInput, Slider, TextBox
 from sound import SoundCore
 
 WHITE = (255, 255, 255)
@@ -15,6 +15,7 @@ LIGHT_BLUE = (64, 128, 255)
 GREEN = (0, 200, 64)
 YELLOW = (225, 225, 0)
 PINK = (230, 50, 230)
+
 
 def load_background(image_name: str) -> pygame.Surface:
     path = os.path.join("data", "Background", image_name)
@@ -174,33 +175,48 @@ class SettingsMenu:
                                 event=pygame.event.Event(CHANGE_MUSIC_MODE),
                                 text='Music off' if SoundCore.is_music_on else 'Music on',
                                 font='data/fonts/menu_font.ttf')
-        self.sounds_off = Button(size=(WIDTH // 2, HEIGHT // 12),
-                                 pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2),
 
-                                 event=pygame.event.Event(CHANGE_SOUND_MODE),
-                                 text='Sound off' if SoundCore.is_sound_on else 'Sound on', font='data/fonts/menu_font.ttf')
         self.return_back = Button(size=(WIDTH // 4.2, HEIGHT // 12),
                                   pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 + 2 * HEIGHT // 8),
                                   event=pygame.event.Event(OPEN_MAIN_MENU_EVENT),
                                   text="To Menu",
                                   font='data/fonts/menu_font.ttf')
+        self.music_textbox = TextBox(size=(WIDTH // 4, HEIGHT // 15),
+                                     pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 - HEIGHT // 8), text='Music volume',
+                                     font='data/fonts/menu_font.ttf')
+        self.music_slider = Slider(size=(WIDTH // 2.3, HEIGHT // 12),
+                                   pos=(WIDTH // 2 - WIDTH // 4.6, HEIGHT // 2 - HEIGHT // 20),
+                                   slider_color=(200, 200, 200), bar_color=(50, 50, 100),
+                                   event=pygame.event.Event(CHANGE_MUSIC_SLIDER))
+
+        self.sound_textbox = TextBox(size=(WIDTH // 4, HEIGHT // 15),
+                                     pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 + HEIGHT // 18), text='Sound volume',
+                                     font='data/fonts/menu_font.ttf')
+
+        self.sound_slider = Slider(size=(WIDTH // 2.3, HEIGHT // 12),
+                                   pos=(WIDTH // 2 - WIDTH // 4.6, HEIGHT // 2 + HEIGHT // 8),
+                                   slider_color=(200, 200, 200), bar_color=(50, 50, 100),
+                                   event=pygame.event.Event(CHANGE_SOUNDS_SLIDER))
+
+        self.music_slider.slider_pos = SoundCore.music_loud
+        self.sound_slider.slider_pos = SoundCore.sound_loud
 
     def buttons_update(self):
-        self.sounds_off = Button(size=(WIDTH // 2, HEIGHT // 12),
-                                 pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2),
-                                 event=pygame.event.Event(CHANGE_SOUND_MODE),
-                                 text='Sound off' if SoundCore.is_sound_on else 'Sound on', font='data/fonts/menu_font.ttf')
-        self.music_off = Button(size=(WIDTH // 2, HEIGHT // 12),
-                                pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 + HEIGHT // 8),
-                                event=pygame.event.Event(CHANGE_MUSIC_MODE),
-                                text='Music off' if SoundCore.is_music_on else 'Music on',
-                                font='data/fonts/menu_font.ttf')
+        pass
+
     def draw(self, screen: pygame.Surface):
         screen.blit(self.background, (0, 0))
         self.change_window_mode.draw(screen, 1)
-        self.music_off.draw(screen, 1)
-        self.sounds_off.draw(screen, 1)
         self.return_back.draw(screen, 1)
+        self.music_slider.draw(screen)
+        self.music_textbox.draw(screen)
+        self.sound_slider.draw(screen)
+        self.sound_textbox.draw(screen)
+
+    def event_handle(self, event):
+        self.music_slider.event_handle(event)
+        self.sound_slider.event_handle(event)
+
 
 class EndScreen:
     # это потом переделаю, пока искал константы

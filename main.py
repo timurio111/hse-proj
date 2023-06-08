@@ -436,6 +436,8 @@ def main(screen):
                 current_screen.event_handle(event)
             if type(current_screen) == StartServerMenu:
                 current_screen.event_handle(event)
+            if type(current_screen) == SettingsMenu:
+                current_screen.event_handle(event)
 
             if event.type == SHOW_GAME_STATISTICS:
                 current_screen = EndScreen(event.dict['statistics'])
@@ -485,6 +487,10 @@ def main(screen):
                 else:
                     SoundCore.music_off()
 
+            if event.type == CHANGE_SOUNDS_SLIDER:
+                SoundCore.change_sounds_loud(event.dict['value'])
+            if event.type == CHANGE_MUSIC_SLIDER:
+                SoundCore.change_music_loud(event.dict['value'])
         try:
             current_screen.draw(screen)
         except Exception as e:
