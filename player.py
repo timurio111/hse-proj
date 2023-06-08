@@ -2,7 +2,6 @@ import os
 
 import pygame
 import yaml
-
 from weapon import Weapon
 
 
