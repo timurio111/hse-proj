@@ -25,7 +25,7 @@ def load_background(image_name: str) -> pygame.Surface:
 class Menu:
     def __init__(self):
         self.visible = True
-        self.background = load_background("gradient2.png")
+        self.background = load_background("menu.png")
         self.button_start_server = Button(size=(WIDTH // 2, HEIGHT // 12),
                                           pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2),
                                           event=pygame.event.Event(START_SERVER_MENU_EVENT),
@@ -56,13 +56,13 @@ class Menu:
 
 class ConnectToServerMenu:
     def __init__(self):
-        self.background = load_background('gradient1.png')
+        self.background = load_background('connect_menu.png')
         self.button_back = Button(size=(WIDTH // 5, 40),
                                   pos=(10, 10),
                                   text="Back",
                                   event=pygame.event.Event(OPEN_MAIN_MENU_EVENT))
-        self.text_input_address = TextInput(size=(WIDTH // 1.1, 25),
-                                            pos=((WIDTH - WIDTH // 1.1) // 2, HEIGHT // 2),
+        self.text_input_address = TextInput(size=(WIDTH // 2, 25),
+                                            pos=((WIDTH - WIDTH // 2) // 2, HEIGHT // 2),
                                             hint="server address",
                                             text="",
                                             font='data/fonts/menu_font.ttf')
@@ -91,13 +91,13 @@ class ConnectToServerMenu:
 
 class StartServerMenu:
     def __init__(self):
-        self.background = load_background('gradient1.png')
+        self.background = load_background('connect_menu.png')
         self.button_back = Button(size=(WIDTH // 5, 40),
                                   pos=(10, 10),
                                   text="Back",
                                   event=pygame.event.Event(OPEN_MAIN_MENU_EVENT))
-        self.text_input_address = TextInput(size=(WIDTH // 1.1, 25),
-                                            pos=((WIDTH - WIDTH // 1.1) // 2, HEIGHT // 2),
+        self.text_input_address = TextInput(size=(WIDTH // 2, 25),
+                                            pos=((WIDTH - WIDTH // 2) // 2, HEIGHT // 2),
                                             hint="server address",
                                             text="",
                                             font='data/fonts/menu_font.ttf')
@@ -163,7 +163,7 @@ class LoadingScreen:
 class SettingsMenu:
     def __init__(self):
         self.visible = True
-        self.background = load_background("gradient2.png")
+        self.background = load_background("settings_menu.png")
         self.change_window_mode = Button(size=(WIDTH // 4.2, HEIGHT // 12),
                                          pos=(3 * WIDTH // 4 - WIDTH // 4.2, HEIGHT // 2 + 2 * HEIGHT // 8),
                                          event=pygame.event.Event(START_SERVER_MENU_EVENT),
@@ -212,7 +212,7 @@ class EndScreen:
     GAMECOORD = (WIDTH * 0.25, HEIGHT * 0.1, WIDTH * 0.45, HEIGHT * 0.75)
 
     def __init__(self, statistics):
-        self.background = load_background('gradient2.png')
+        self.background = load_background('settings_menu.png')
         self.n_players = len(statistics.keys())
         self.table = pygame.Rect(EndScreen.TABCOORD)
         self.player_card1 = pygame.Rect(EndScreen.PLAYERCOORD1)

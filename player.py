@@ -2,7 +2,6 @@ import os
 
 import pygame
 import yaml
-
 from weapon import Weapon
 
 
@@ -155,7 +154,7 @@ class Player:
             return
         if self.jump_counter == 0:
             self.off_ground_counter = 0
-            self.vy = -600
+            self.vy = -650
             self.jump_counter += 1
 
     def touch_down(self):
@@ -204,7 +203,8 @@ class Player:
 
     def draw(self, screen, offset_x, offset_y):
         screen.blit(self.sprite, (self.rect.x + offset_x, self.rect.y + offset_y))
-        self.weapon.draw(screen, offset_x, offset_y)
+        if self.hp > 0:
+            self.weapon.draw(screen, offset_x, offset_y)
 
     def encode(self):
         return [self.rect.x, self.rect.y, self.status, self.direction, round(self.sprite_animation_counter, 2),
