@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from random import shuffle, choice
 
 import pygame
 
@@ -16,15 +17,11 @@ POSITIONS_SEND_RATE = 120
 
 server = "127.0.0.1"
 tcp_port = 5555
-udp_port = 5556
-
-current_id = 0
-id_to_stream: dict[int, tuple[asyncio.StreamReader, asyncio.StreamWriter]] = {}
-id_to_udp_address: dict[int, tuple[str, int]] = {}
-client_socket_to_id: dict[tuple[asyncio.StreamReader, asyncio.StreamWriter], int] = {}
-id_to_last_udp_packet_time: dict[int, float] = {}
+udp_port = tcp_port + 1
 
 start_time = int(time.time())
+
+level_names = ['pirate_ship_map', 'firstmap', 'pirate_island_map']
 
 
 class GameStatistics:
@@ -44,9 +41,6 @@ class GameStatistics:
 
     def __setitem__(self, key, value):
         self.players_data[key] = value
-
-
-game_statistics = GameStatistics()
 
 
 class ServerPlayer:
@@ -87,20 +81,6 @@ class ServerPlayer:
     def encode(self) -> list:
         return [self.x, self.y, self.status, self.direction, self.sprite_animation_counter, self.hp,
                 self.vx, self.vy, self.off_ground_counter, self.color]
-
-    def take_damage(self, bullet: ServerBullet):
-        self.hp -= bullet.damage
-        game_statistics[bullet.owner]['damage'] += min(bullet.damage, self.hp)
-        if self.hp <= 0:
-            self.death()
-            game_statistics[bullet.owner]['kill'] += 1
-
-    def death(self):
-        if self.id not in game_state.players_alive:
-            return
-        self.hp = 0
-        game_statistics[self.id]['death'] += 1
-        game_state.players_alive.remove(self.id)
 
     def __repr__(self):
         return str((self.x, self.y, self.hp))
@@ -158,13 +138,10 @@ class ServerWeapon:
 
     def update(self, time_delta, level):
         time_delta = min(1 / 20, time_delta)
-        if self.owner not in game_state.players_alive:
-            self.owner = None
         if self.owner:
-            owner = game_state.players[self.owner]
-            self.direction = owner.direction
-            self.rect.x = owner.x + Weapon.all_weapons_info[self.name][f'OFFSET_X_{self.direction.upper()}']
-            self.rect.y = owner.y + Weapon.all_weapons_info[self.name]['OFFSET_Y']
+            self.direction = self.owner.direction
+            self.rect.x = self.owner.x + Weapon.all_weapons_info[self.name][f'OFFSET_X_{self.direction.upper()}']
+            self.rect.y = self.owner.y + Weapon.all_weapons_info[self.name]['OFFSET_Y']
         else:
             dvy = 128
             dy = int(time_delta * self.vy)
@@ -181,10 +158,6 @@ class ServerWeapon:
             return self.rect.x + self.center_offset_x, self.rect.y + self.bottom_offset_y
         elif self.direction == 'left':
             return self.rect.right - self.center_offset_x, self.rect.y + self.bottom_offset_y
-
-    def pick_up(self, player_id):
-        self.owner = player_id
-        game_state.players[player_id].weapon_id = self.weapon_id
 
     def encode(self):
         return [self.name, self.rect.x, self.rect.y, self.ammo]
@@ -243,371 +216,544 @@ class GameState:
         return spawn_point.x, spawn_point.y
 
 
-game_state = GameState()
+class ServerEvent:
+    ACCEPT_CONNECTION = 0
+    SEND_TCP = 1
+    SEND_UDP = 2
+    SEND_INITIAL_GAME_INFO = 3
+    HANDLE_PACKET = 4
+    DISCONNECT_PLAYER = 5
+    SEND_PLAYERS_DATA = 6
+    UPDATE_GAME_STATE = 7
+    CHANGE_LEVEL = 8
+    KILL_SERVER = 9
 
+    def __init__(self, event_type, data=None, delay=0):
+        self.event_type = event_type
+        self.data = data if data is not None else {}
+        self.time = time.time() + delay
 
-async def accept_connection(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-    global current_id, client_socket_to_id, id_to_stream
+    def __getitem__(self, item):
+        return self.data[item]
 
-    client_id = current_id
-
-    id_to_stream[client_id] = (reader, writer)
-    client_socket_to_id[(reader, writer)] = current_id
-    id_to_last_udp_packet_time[client_id] = 0
-    current_id += 1
-
-    if game_state.game_started:
-        response = DataPacket(DataPacket.GAME_ALREADY_STARTED)
-        await send(client_id, response)
-        await disconnect(client_id)
-        return
-
-    game_statistics.new_player(client_id)
-    auth_data = {'id': client_id}
-    response = DataPacket(DataPacket.AUTH, auth_data)
-    await send(client_id, response)
-
-    print(f"New connection. Id={client_id}")
-
-    game_data = {'level_name': 'lobby', 'position': game_state.get_spawn_point(), 'color': color_generator.__next__()}
-    response = DataPacket(DataPacket.GAME_INFO, game_data)
-    await send(client_id, response)
-
-    while True:
-        try:
-            data = await read(reader)
-        except Exception as e:
-            print(type(e))
-            break
-        if data == b'':
-            break
-        data_packet = DataPacket.from_bytes(data)
-        await handle_packet(data_packet)
-
-    await disconnect(client_id)
-
-
-async def disconnect(client_id: int):
-    reader, writer = id_to_stream[client_id]
-    client_id = client_socket_to_id[(reader, writer)]
-
-    if client_id in game_state.players_alive:
-        game_state.players[client_id].death()
-    if client_id in game_state.players.keys():
-        game_state.players.pop(client_id)
-        id_to_stream.pop(client_id)
-        id_to_udp_address.pop(client_id)
-        id_to_last_udp_packet_time.pop(client_id)
-        client_socket_to_id.pop((reader, writer))
-    writer.close()
-    await writer.wait_closed()
-    print(f'client with id {client_id} disconnected')
-
-
-async def read(reader: asyncio.StreamReader) -> bytes:
-    return await reader.readline()
-
-
-async def send_players_data(client_id: int, protocol):
-    players_data = dict()
-    for player_id in game_state.players.keys():
-        if GameState.STATUS_PLAYING not in game_state.players[player_id].flags:
-            continue
-        players_data[player_id] = game_state.players[player_id].encode()
-    response = DataPacket(DataPacket.PLAYERS_INFO, players_data)
-
-    protocol.send(client_id, response)
-
-
-async def send(client_id: int, data_packet: DataPacket):
-    _, writer = id_to_stream[client_id]
-    data_packet.headers['game_id'] = game_state.level_id
-    writer.write(data_packet.encode())
-    await writer.drain()
-
-
-def spawn_players():
-    if game_state.lastlevel:
-        for player_id in game_statistics.sort_by_rating():
-            if player_id not in game_state.players.keys():
-                continue
-            game_state.players[player_id].hp = 100
-            spawn_pos = game_state.get_spawn_point()
-            yield player_id, spawn_pos
-    else:
-        for player_id in game_state.players.keys():
-            game_state.players[player_id].hp = 100
-            spawn_pos = game_state.get_spawn_point()
-            yield player_id, spawn_pos
-
-
-async def end_game(n_players):
-    game_state.lastlevel = True
-    await change_level('lastmap' + str(n_players))
-
-
-async def change_level(level_name):
-    game_state.game_ended = False
-    game_state.change_level(level_name)
-    gen_spawn = spawn_players()
-    for player_id, spawn_pos in gen_spawn:
-        player_color = game_state.players[player_id].color
-        game_data = {'level_name': game_state.level_name, 'position': spawn_pos, 'color': player_color}
-        game_state.players[player_id].x, game_state.players[player_id].y = spawn_pos
-
-        response = DataPacket(DataPacket.GAME_INFO, game_data)
-        if GameState.STATUS_PLAYING in game_state.players[player_id].flags:
-            game_state.players[player_id].flags.remove(GameState.STATUS_PLAYING)
-        await send(player_id, response)
-
-        for weapon_id, weapon in game_state.weapons.items():
-            weapon_data = {'weapon_id': weapon_id, 'weapon_data': weapon.encode()}
-            response = DataPacket(DataPacket.NEW_WEAPON_FROM_SERVER, weapon_data)
-            await send(player_id, response)
-
-    if game_state.lastlevel:
-        await asyncio.sleep(5)
-        for player_id in game_state.players.keys():
-            response = DataPacket(DataPacket.DISCONNECT, {'statistics': game_statistics.players_data})
-            await send(player_id, response)
-        await asyncio.sleep(5)  # хз, вроде, стало стабильнее
-        quit(0)
-
-
-async def handle_packet(data_packet: DataPacket):
-    client_id: int = data_packet.headers['id']
-
-    if client_id == -1:
-        return
-
-    if data_packet.headers['game_id'] != game_state.level_id:
-        return
-
-    if data_packet.data_type == DataPacket.INITIAL_INFO:
-        data = data_packet['data']
-        game_state.players[client_id] = ServerPlayer.from_player_data(client_id, data)
-        game_state.players[client_id].flags.add(GameState.STATUS_PLAYING)
-
-    if data_packet.data_type == DataPacket.CLIENT_PLAYER_INFO:
-        if GameState.STATUS_PLAYING in game_state.players[client_id].flags:
-            data = data_packet['data']
-            game_state.players[client_id].apply(data)
-
-    if data_packet.data_type == DataPacket.ADD_PLAYER_FLAG:
-        game_state.players[client_id].flags.add(data_packet['data'])
-
-    if data_packet.data_type == DataPacket.REMOVE_PLAYER_FLAG:
-        flag = data_packet['data']
-        if flag in game_state.players[client_id].flags:
-            game_state.players[client_id].flags.remove(flag)
-
-    if data_packet.data_type == DataPacket.NEW_SHOT_FROM_CLIENT:
-        bullet_data = data_packet['data']
-        bullet = ServerBullet.from_data(client_id, bullet_data)
-        bullet_id = ServerBullet.bullet_id
-        ServerBullet.bullet_id += 1
-
-        game_state.bullets[bullet_id] = bullet
-
-        response = DataPacket(DataPacket.NEW_SHOT_FROM_SERVER, [client_id, bullet_id, bullet_data])
-        for client_id in id_to_stream.keys():
-            await send(client_id, response)
-
-    if data_packet.data_type == DataPacket.CLIENT_PICK_WEAPON_REQUEST:
-        closest_weapon_id = None
-        min_dist = 1e9
-        for weapon_id, weapon in game_state.weapons.items():
-
-            if weapon.owner is not None:
-                continue
-            distance = pygame.math.Vector2(weapon.get_center()).distance_to(game_state.players[client_id].get_center())
-            if distance > 32:
-                continue
-            if distance < min_dist:
-                min_dist = distance
-                closest_weapon_id = weapon_id
-
-        if closest_weapon_id is not None:
-            game_state.weapons[closest_weapon_id].owner = client_id
-            response = DataPacket(DataPacket.CLIENT_PICKED_WEAPON,
-                                  {'owner_id': client_id, 'weapon_id': closest_weapon_id})
-            for client_id in id_to_stream.keys():
-                await send(client_id, response)
-
-    if data_packet.data_type == DataPacket.CLIENT_DROPPED_WEAPON:
-        weapon_id = data_packet['weapon_id']
-        weapon_direction = data_packet['weapon_direction']
-        weapon_position = data_packet['weapon_position']
-        weapon_ammo = data_packet['weapon_ammo']
-        game_state.weapons[weapon_id].owner = None
-        game_state.weapons[weapon_id].rect.x, game_state.weapons[weapon_id].rect.y = weapon_position
-        game_state.weapons[weapon_id].direction = weapon_direction
-        response = DataPacket(DataPacket.CLIENT_DROPPED_WEAPON,
-                              {'owner_id': client_id,
-                               'weapon_id': weapon_id,
-                               'weapon_position': weapon_position,
-                               'weapon_direction': weapon_direction,
-                               'weapon_ammo': weapon_ammo})
-        for client_id in id_to_stream.keys():
-            await send(client_id, response)
-
-
-async def update(time_delta):
-    # Игроков не осталось
-    if not game_state.players:
-        if game_state.level_name != 'lobby':
-            await change_level('lobby')
-        game_state.game_started = False
-        return
-
-    # Все игроки готовы начать игру (флаг устанавливается в лобби)
-    if all([DataPacket.FLAG_READY in player.flags for player in game_state.players.values()]) \
-            and not game_state.game_ended and len(game_state.players) > 1:
-        game_state.game_ended = True
-        game_state.game_started = True
-        await asyncio.sleep(1)
-        await change_level('firstmap')
-        return
-
-    # В живых остался только один (не единственный) игрок
-    if len(game_state.players) > 1 and len(game_state.players_alive) == 1 and not game_state.game_ended:
-        game_state.game_ended = True
-        game_statistics[game_state.players_alive.pop()]['win'] += 1
-        await asyncio.sleep(1)
-        if game_state.level_id == GameState.MAX_LEVELS:
-            await end_game(len(game_state.players.keys()))
-        else:
-            await change_level('firstmap')
-        return
-
-    for weapon_id in game_state.weapons.keys():
-        game_state.weapons[weapon_id].update(time_delta, game_state.level)
-
-    # Пробегаемся по все игрокам
-    for client_id in id_to_stream.keys():
-
-        # Игрок выпал за пределы карты
-        if client_id in game_state.players.keys() and game_state.players[client_id].y > 3000:
-            if game_state.players[client_id].hp == 0:
-                continue
-            game_state.players[client_id].death()
-            data_packet = DataPacket(DataPacket.HEALTH_POINTS, game_state.players[client_id].hp)
-            await send(client_id, data_packet)
-
-    # noinspection PyShadowingNames
-    async def delete_bullet(bullet_id):  # Рассылает всем пакет, о том, что пуля с id=bullet_id удалена
-        if bullet_id not in game_state.bullets.keys():
-            return
-        game_state.bullets.pop(bullet_id)
-        for client_id in id_to_stream.keys():
-            data_packet = DataPacket(DataPacket.DELETE_BULLET_FROM_SERVER, bullet_id)
-            await send(client_id, data_packet)
-
-    for bullet_id in list(game_state.bullets):
-        bullet = game_state.bullets[bullet_id]
-        bullet.update(time_delta)
-
-        if bullet.current_lifetime_seconds > bullet.max_lifetime_seconds or \
-                game_state.level.collide_point(*bullet.get_position()):
-            await delete_bullet(bullet_id)
-            continue
-
-        for client_id in id_to_stream.keys():
-            if game_state.players[client_id].hp <= 0:
-                continue
-            if GameState.STATUS_PLAYING not in game_state.players[client_id].flags:
-                continue
-
-            if game_state.players[client_id].sprite_rect.collidepoint(bullet.get_position()):
-                game_state.players[client_id].take_damage(bullet)
-
-                if game_state.players[client_id].hp <= 0:
-                    weapon_id = game_state.players[client_id].weapon_id
-                    if weapon_id != -1:
-                        weapon = game_state.weapons[weapon_id]
-                        weapon_direction = weapon.direction
-                        weapon_position = weapon.get_center()
-                        weapon_ammo = weapon.ammo
-                        game_state.weapons[weapon_id].owner = None
-                        game_state.weapons[weapon_id].rect.x, game_state.weapons[weapon_id].rect.y = weapon_position
-                        game_state.weapons[weapon_id].direction = weapon_direction
-                        response = DataPacket(DataPacket.CLIENT_DROPPED_WEAPON,
-                                              {'owner_id': client_id,
-                                               'weapon_id': weapon_id,
-                                               'weapon_position': weapon_position,
-                                               'weapon_direction': weapon_direction,
-                                               'weapon_ammo': weapon_ammo})
-                        for client_id in id_to_stream.keys():
-                            await send(client_id, response)
-
-                data_packet = DataPacket(DataPacket.HEALTH_POINTS, game_state.players[client_id].hp)
-                await send(client_id, data_packet)
-                await delete_bullet(bullet_id)
-
-
-async def update_loop():
-    last_tick = time.time()
-    while True:
-        time_delta = time.time() - last_tick
-        last_tick = time.time()
-
-        await update(time_delta)
-        await asyncio.sleep(1 / TICK_RATE)
-
-
-async def send_positions_loop(protocol):
-    while True:
-        for client_id in id_to_udp_address.keys():
-            await send_players_data(client_id, protocol)
-        await asyncio.sleep(1 / POSITIONS_SEND_RATE)
+    def __setitem__(self, key, value):
+        self.data[key] = value
 
 
 class UdpServerProtocol(asyncio.DatagramProtocol):
+
+    def __init__(self, events_queue: asyncio.Queue):
+        self.events_queue = events_queue
+
+    # noinspection PyAttributeOutsideInit
     def connection_made(self, transport):
         self.transport = transport
 
     def datagram_received(self, data, addr):
         data_packet = DataPacket.from_bytes(data)
+        handle_packet_event = ServerEvent(event_type=ServerEvent.HANDLE_PACKET,
+                                          data={'type': 'datagram',
+                                                'address': addr,
+                                                'packet': data_packet})
+        self.events_queue.put_nowait(handle_packet_event)
+
+
+class ServerNetwork:
+    __next_client_id = 0
+
+    @staticmethod
+    def get_next_client_id():
+        client_id = ServerNetwork.__next_client_id
+        ServerNetwork.__next_client_id += 1
+        return client_id
+
+    def __init__(self, events_queue: asyncio.Queue):
+        self.lock = asyncio.Lock()
+
+        self.events_queue = events_queue
+        self.id_to_stream: dict[int, tuple[asyncio.StreamReader, asyncio.StreamWriter]] = {}
+        self.stream_to_id: dict[tuple[asyncio.StreamReader, asyncio.StreamWriter], int] = {}
+
+        self.id_to_udp_address: dict[int, tuple[str, int]] = {}
+        self.id_to_last_udp_packet_time: dict[int, float] = {}
+
+    @classmethod
+    async def create(cls, events_queue: asyncio.Queue):
+        self = ServerNetwork(events_queue)
+        await self.start()
+
+        return self
+
+    # noinspection PyAttributeOutsideInit
+    async def start(self):
+        self.transport, self.protocol = await asyncio.get_running_loop().create_datagram_endpoint(
+            protocol_factory=lambda: UdpServerProtocol(self.events_queue),
+            local_addr=(server, udp_port)
+        )
+
+        self.tcp_server = await asyncio.start_server(
+            client_connected_cb=self.acceptor,
+            host=server,
+            port=tcp_port)
+
+    async def acceptor(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        flag = asyncio.Event()
+
+        client_id = ServerNetwork.get_next_client_id()
+
+        self.id_to_stream[client_id] = (reader, writer)
+        self.stream_to_id[(reader, writer)] = client_id
+        self.id_to_last_udp_packet_time[client_id] = 0
+
+        print(f'client with id {client_id} connected')
+
+        server_event = ServerEvent(event_type=ServerEvent.ACCEPT_CONNECTION,
+                                   data={'client_id': client_id,
+                                         'reader': reader,
+                                         'writer': writer,
+                                         'flag': flag})
+
+        self.events_queue.put_nowait(server_event)
+
+        try:
+            await asyncio.wait_for(flag.wait(), timeout=2)  # TODO? костыль
+        except asyncio.TimeoutError:
+            server_event = ServerEvent(event_type=ServerEvent.DISCONNECT_PLAYER,
+                                       data={'client_id': client_id})
+            self.events_queue.put_nowait(server_event)
+            return
+
+        response_data = {'id': client_id}
+        response = DataPacket(data_type=DataPacket.AUTH, data=response_data)
+        response.headers['game_id'] = 0
+        server_event = ServerEvent(event_type=ServerEvent.SEND_TCP,
+                                   data={'client_id': client_id, 'packet': response})
+        self.events_queue.put_nowait(server_event)
+
+        server_event = ServerEvent(event_type=ServerEvent.SEND_INITIAL_GAME_INFO,
+                                   data={'client_id': client_id})
+        self.events_queue.put_nowait(server_event)
+
+        while True:
+            try:
+                data = await reader.readline()
+            except Exception as e:
+                print(e)
+                break
+            if data == b'':
+                break
+            data_packet = DataPacket.from_bytes(data)
+            handle_packet_event = ServerEvent(event_type=ServerEvent.HANDLE_PACKET,
+                                              data={'type': 'tcp',
+                                                    'packet': data_packet})
+            self.events_queue.put_nowait(handle_packet_event)
+
+        server_event = ServerEvent(event_type=ServerEvent.DISCONNECT_PLAYER,
+                                   data={'client_id': client_id})
+        self.events_queue.put_nowait(server_event)
+
+    async def send_tcp(self, client_id: int, data_packet: DataPacket):
+        _, writer = self.id_to_stream[client_id]
+        writer.write(data_packet.encode())
+        await writer.drain()
+
+    def send_udp(self, client_id: int, data_packet: DataPacket):
+        data_packet.headers['time'] = round(time.time() - start_time, 3)
+        self.protocol.transport.sendto(data=data_packet.encode(),
+                                       addr=self.id_to_udp_address[client_id])
+
+
+class GameSession:
+    next_session_id = 0
+
+    def __init__(self):
+        self.events_queue: asyncio.Queue[ServerEvent] = asyncio.Queue()
+        self.game_statistics = GameStatistics()
+        self.game_state = GameState()
+
+    @classmethod
+    async def create(cls):
+        self = GameSession()
+        await self.start()
+
+        return self
+
+    # noinspection PyAttributeOutsideInit
+    async def start(self):
+        self.server_network = await ServerNetwork.create(self.events_queue)
+
+        events_handler = asyncio.create_task(self.events_listener())
+        players_data_sender = asyncio.create_task(self.players_data_sender())
+        game_state_updater = asyncio.create_task(self.game_state_updater())
+
+        await events_handler
+        await players_data_sender
+        await game_state_updater
+
+    def send_packet_tcp(self, client_id: int, data_packet: DataPacket, delay_seconds=0):
+        data_packet.headers['game_id'] = self.game_state.level_id
+        server_event = ServerEvent(event_type=ServerEvent.SEND_TCP,
+                                   data={'client_id': client_id, 'packet': data_packet},
+                                   delay=delay_seconds)
+        self.events_queue.put_nowait(server_event)
+
+    def send_packet_udp(self, client_id: int, data_packet: DataPacket, delay_seconds=0):
+        data_packet.headers['game_id'] = self.game_state.level_id
+        server_event = ServerEvent(event_type=ServerEvent.SEND_UDP,
+                                   data={'client_id': client_id, 'packet': data_packet},
+                                   delay=delay_seconds)
+        self.events_queue.put_nowait(server_event)
+
+    async def players_data_sender(self):
+        while True:
+            server_event = ServerEvent(event_type=ServerEvent.SEND_PLAYERS_DATA)
+            self.events_queue.put_nowait(server_event)
+            await asyncio.sleep(1 / POSITIONS_SEND_RATE)
+
+    async def game_state_updater(self):
+        last_tick = time.time()
+        while True:
+            time_delta = time.time() - last_tick
+            last_tick = time.time()
+
+            server_event = ServerEvent(event_type=ServerEvent.UPDATE_GAME_STATE,
+                                       data={'time_delta': time_delta})
+            self.events_queue.put_nowait(server_event)
+            await asyncio.sleep(1 / TICK_RATE)
+
+    async def events_listener(self):
+        while True:
+            server_event = await self.events_queue.get()
+
+            if server_event.time > time.time():
+                self.events_queue.put_nowait(server_event)
+                await asyncio.sleep(0)
+                continue
+
+            if server_event.event_type == ServerEvent.KILL_SERVER:
+                quit(0)  # TODO? сервер завершает работу после игры
+
+            if server_event.event_type == ServerEvent.ACCEPT_CONNECTION:
+                client_id: int = server_event['client_id']
+                reader: asyncio.StreamReader = server_event['reader']
+                writer: asyncio.StreamWriter = server_event['writer']
+                flag: asyncio.Event = server_event['flag']
+
+                self.server_network.id_to_stream[client_id] = (reader, writer)
+                self.server_network.stream_to_id[(reader, writer)] = client_id
+
+                if self.game_state.game_started or len(self.game_state.players) >= 4:
+                    response = DataPacket(data_type=DataPacket.GAME_ALREADY_STARTED)
+                    self.send_packet_tcp(client_id, response)
+                else:
+                    self.game_statistics.new_player(client_id)
+                    flag.set()
+
+            if server_event.event_type == ServerEvent.DISCONNECT_PLAYER:
+                client_id: int = server_event['client_id']
+                reader, writer = self.server_network.id_to_stream[client_id]
+
+                self.server_network.id_to_stream.pop(client_id)
+                self.server_network.stream_to_id.pop((reader, writer))
+                self.server_network.id_to_last_udp_packet_time.pop(client_id)
+                if client_id in self.game_state.players.keys():
+                    self.game_state.players.pop(client_id)
+                if client_id in self.server_network.id_to_udp_address.keys():
+                    self.server_network.id_to_udp_address.pop(client_id)
+
+                print(f'client with id {client_id} disconnected')
+                writer.close()
+                await writer.wait_closed()
+
+            if server_event.event_type == ServerEvent.UPDATE_GAME_STATE:
+                time_delta = server_event['time_delta']
+                self.update_game_state(time_delta)
+
+            if server_event.event_type == ServerEvent.SEND_PLAYERS_DATA:
+                players_data = dict()
+                for player_id in self.game_state.players.keys():
+                    if GameState.STATUS_PLAYING not in self.game_state.players[player_id].flags:
+                        continue
+                    players_data[player_id] = self.game_state.players[player_id].encode()
+                response = DataPacket(data_type=DataPacket.PLAYERS_INFO, data=players_data)
+
+                for client_id in self.server_network.id_to_udp_address.keys():
+                    self.send_packet_udp(client_id, response)
+
+            if server_event.event_type == ServerEvent.CHANGE_LEVEL:
+                level_name = server_event['level_name']
+                self.change_level(level_name)
+
+            if server_event.event_type == ServerEvent.SEND_TCP:
+                client_id: int = server_event['client_id']
+                data_packet: DataPacket = server_event['packet']
+                await self.server_network.send_tcp(client_id, data_packet)
+
+            if server_event.event_type == ServerEvent.SEND_UDP:
+                client_id: int = server_event['client_id']
+                data_packet: DataPacket = server_event['packet']
+                self.server_network.send_udp(client_id, data_packet)
+
+            if server_event.event_type == ServerEvent.SEND_INITIAL_GAME_INFO:
+                client_id: int = server_event['client_id']
+
+                response_data = {'level_name': 'lobby',
+                                 'position': self.game_state.get_spawn_point(),
+                                 'color': color_generator.__next__()}
+                response = DataPacket(data_type=DataPacket.GAME_INFO, data=response_data)
+                self.send_packet_tcp(client_id, response)
+
+            if server_event.event_type == ServerEvent.HANDLE_PACKET:
+                packet_type = server_event['type']
+                data_packet = server_event['packet']
+
+                client_id: int = data_packet.headers['id']
+                if client_id == -1:
+                    continue
+                if client_id not in self.server_network.id_to_stream.keys():
+                    continue
+
+                if packet_type == 'datagram':
+                    if client_id not in self.game_state.players.keys():
+                        continue
+                    if data_packet.headers['game_id'] != self.game_state.level_id:
+                        continue
+
+                    addr = server_event['address']
+                    if data_packet.headers['time'] < self.server_network.id_to_last_udp_packet_time[client_id]:
+                        continue
+                    self.server_network.id_to_last_udp_packet_time[client_id] = data_packet.headers['time']
+                    if client_id not in self.server_network.id_to_udp_address.keys():
+                        self.server_network.id_to_udp_address[client_id] = addr
+
+                self.packet_handler(data_packet)
+
+    def packet_handler(self, data_packet: DataPacket):
         client_id = data_packet.headers['id']
+
         if client_id == -1:
             return
-        if data_packet.headers['time'] < id_to_last_udp_packet_time[client_id]:
+
+        if data_packet.data_type == DataPacket.INITIAL_INFO:
+            data = data_packet['data']
+            self.game_state.players[client_id] = ServerPlayer.from_player_data(client_id, data)
+            self.game_state.players[client_id].flags.add(GameState.STATUS_PLAYING)
+
+        if data_packet.data_type == DataPacket.CLIENT_PLAYER_INFO:
+            if GameState.STATUS_PLAYING in self.game_state.players[client_id].flags:
+                data = data_packet['data']
+                self.game_state.players[client_id].apply(data)
+
+        if data_packet.data_type == DataPacket.ADD_PLAYER_FLAG:
+            self.game_state.players[client_id].flags.add(data_packet['data'])
+
+        if data_packet.data_type == DataPacket.REMOVE_PLAYER_FLAG:
+            flag = data_packet['data']
+            if flag in self.game_state.players[client_id].flags:
+                self.game_state.players[client_id].flags.remove(flag)
+
+        if data_packet.data_type == DataPacket.NEW_SHOT_FROM_CLIENT:
+            bullet_data = data_packet['data']
+            bullet = ServerBullet.from_data(client_id, bullet_data)
+            bullet_id = ServerBullet.bullet_id
+            ServerBullet.bullet_id += 1
+
+            self.game_state.bullets[bullet_id] = bullet
+
+            response = DataPacket(DataPacket.NEW_SHOT_FROM_SERVER, [client_id, bullet_id, bullet_data])
+            for client_id in self.game_state.players.keys():
+                self.send_packet_tcp(client_id, response)
+
+        if data_packet.data_type == DataPacket.CLIENT_PICK_WEAPON_REQUEST:
+            closest_weapon_id = None
+            min_dist = 1e9
+            for weapon_id, weapon in self.game_state.weapons.items():
+
+                if weapon.owner is not None:
+                    continue
+                distance = pygame.math.Vector2(weapon.get_center()).distance_to(self.game_state.players[client_id].get_center())
+                if distance > 32:
+                    continue
+                if distance < min_dist:
+                    min_dist = distance
+                    closest_weapon_id = weapon_id
+
+            if closest_weapon_id is not None:
+                self.game_state.weapons[closest_weapon_id].owner = self.game_state.players[client_id]
+                self.game_state.players[client_id].weapon_id = closest_weapon_id
+                response = DataPacket(data_type=DataPacket.CLIENT_PICKED_WEAPON,
+                                      data={'owner_id': client_id, 'weapon_id': closest_weapon_id})
+                for client_id in self.game_state.players.keys():
+                    self.send_packet_tcp(client_id, response)
+
+        if data_packet.data_type == DataPacket.CLIENT_DROPPED_WEAPON:
+            weapon_id = data_packet['weapon_id']
+            weapon_direction = data_packet['weapon_direction']
+            weapon_position = data_packet['weapon_position']
+            weapon_ammo = data_packet['weapon_ammo']
+            self.game_state.weapons[weapon_id].owner = None
+            self.game_state.weapons[weapon_id].rect.x, self.game_state.weapons[weapon_id].rect.y = weapon_position
+            self.game_state.weapons[weapon_id].direction = weapon_direction
+            response = DataPacket(DataPacket.CLIENT_DROPPED_WEAPON,
+                                  {'owner_id': client_id,
+                                   'weapon_id': weapon_id,
+                                   'weapon_position': weapon_position,
+                                   'weapon_direction': weapon_direction,
+                                   'weapon_ammo': weapon_ammo})
+            for client_id in self.game_state.players.keys():
+                self.send_packet_tcp(client_id, response)
+
+    def change_level(self, level_name):
+        self.game_state.game_ended = False
+        self.game_state.change_level(level_name)
+
+        players_by_rating = [player for player in self.game_statistics.sort_by_rating() if player in self.game_state.players.keys()]
+        spawn_points = [self.game_state.get_spawn_point() for _ in range(len(players_by_rating))]
+
+        if not self.game_state.lastlevel:
+            shuffle(spawn_points)
+
+        for player_id, spawn_point in zip(players_by_rating, spawn_points):
+            if GameState.STATUS_PLAYING in self.game_state.players[player_id].flags:
+                self.game_state.players[player_id].flags.remove(GameState.STATUS_PLAYING)
+
+            player_color = self.game_state.players[player_id].color
+            response_data = {'level_name': level_name,
+                             'position': spawn_point,
+                             'color': player_color}
+
+            response = DataPacket(data_type=DataPacket.GAME_INFO, data=response_data)
+            self.send_packet_tcp(player_id, response)
+
+            for weapon_id, weapon in self.game_state.weapons.items():
+                weapon_data = {'weapon_id': weapon_id, 'weapon_data': weapon.encode()}
+                response = DataPacket(data_type=DataPacket.NEW_WEAPON_FROM_SERVER, data=weapon_data)
+                self.send_packet_tcp(player_id, response)
+
+        if self.game_state.lastlevel:
+            for player_id in self.game_state.players.keys():
+                response = DataPacket(data_type=DataPacket.DISCONNECT,
+                                      data={'statistics': self.game_statistics.players_data})
+                self.send_packet_tcp(player_id, response, delay_seconds=5)
+
+                self.events_queue.put_nowait(ServerEvent(event_type=ServerEvent.KILL_SERVER, delay=6))
+
+    def update_game_state(self, time_delta):
+        if not self.game_state.players:
+            if self.game_state.level_name != 'lobby':
+                self.game_state.game_ended = False
+                self.game_state.game_started = False
+                server_event = ServerEvent(event_type=ServerEvent.CHANGE_LEVEL,
+                                           data={'level_name': 'lobby'})
+                self.events_queue.put_nowait(server_event)
             return
-        id_to_last_udp_packet_time[client_id] = data_packet.headers['time']
-        id_to_udp_address[client_id] = addr
-        asyncio.get_running_loop().create_task(self.handle(data_packet))
 
-    async def handle(self, data_packet):
-        await handle_packet(data_packet)
+        if all([DataPacket.FLAG_READY in player.flags for player in self.game_state.players.values()]) \
+                and not self.game_state.game_ended and len(self.game_state.players) > 1:
+            self.game_state.game_ended = True
+            self.game_state.game_started = True
+            level_name = choice(level_names)
+            server_event = ServerEvent(event_type=ServerEvent.CHANGE_LEVEL,
+                                       data={'level_name': level_name},
+                                       delay=2)
+            self.events_queue.put_nowait(server_event)
+            return
 
-    def send(self, client_id: int, data_packet: DataPacket):
-        data_packet.headers['game_id'] = game_state.level_id
-        data_packet.headers['time'] = round(time.time() - start_time, 3)
-        self.transport.sendto(data_packet.encode(), id_to_udp_address[client_id])
+        if len(self.game_state.players) > 1 and len(self.game_state.players_alive) == 1 and not self.game_state.game_ended:
+            self.game_state.game_ended = True
+            self.game_statistics[self.game_state.players_alive.pop()]['win'] += 1
+            if self.game_state.level_id == GameState.MAX_LEVELS:
+                self.game_state.lastlevel = True
+                final_level_name = 'lastmap' + str(len(self.game_state.players.keys()))
+                server_event = ServerEvent(event_type=ServerEvent.CHANGE_LEVEL,
+                                           data={'level_name': final_level_name},
+                                           delay=1)
+                self.events_queue.put_nowait(server_event)
+            else:
+                level_name = choice(level_names)
+                server_event = ServerEvent(event_type=ServerEvent.CHANGE_LEVEL,
+                                           data={'level_name': level_name},
+                                           delay=1)
+                self.events_queue.put_nowait(server_event)
+            return
+
+        for weapon_id in self.game_state.weapons.keys():
+            self.game_state.weapons[weapon_id].update(time_delta, self.game_state.level)
+
+        for client_id in self.game_state.players.keys():
+
+            if client_id in self.game_state.players.keys() and self.game_state.players[client_id].y > 3000:
+                if client_id not in self.game_state.players_alive:
+                    continue
+                if GameState.STATUS_PLAYING not in self.game_state.players[client_id].flags:
+                    continue
+                self.kill_player(client_id)
+
+        for bullet_id in list(self.game_state.bullets.keys()):
+            bullet = self.game_state.bullets[bullet_id]
+            bullet.update(time_delta)
+
+            if bullet.current_lifetime_seconds > bullet.max_lifetime_seconds or \
+                    self.game_state.level.collide_point(*bullet.get_position()):
+                self.delete_bullet(bullet_id)
+                continue
+
+            for client_id in self.game_state.players.keys():
+                if client_id not in self.game_state.players_alive:
+                    continue
+                if GameState.STATUS_PLAYING not in self.game_state.players[client_id].flags:
+                    continue
+
+                if self.game_state.players[client_id].sprite_rect.collidepoint(bullet.get_position()):
+                    self.damage_player(client_id, bullet)
+
+                    self.delete_bullet(bullet_id)
+
+    def delete_bullet(self, bullet_id):
+        self.game_state.bullets.pop(bullet_id)
+        for client_id in self.game_state.players.keys():
+            data_packet = DataPacket(DataPacket.DELETE_BULLET_FROM_SERVER, bullet_id)
+            self.send_packet_tcp(client_id, data_packet)
+
+    def damage_player(self, player_id, bullet: ServerBullet):
+        player = self.game_state.players[player_id]
+        damage = min(bullet.damage, player.hp)
+        self.game_statistics[bullet.owner]['damage'] += damage
+        player.hp -= damage
+
+        response = DataPacket(DataPacket.HEALTH_POINTS, self.game_state.players[player_id].hp)
+        self.send_packet_tcp(player_id, response)
+
+        if player.hp == 0:
+            self.game_statistics[bullet.owner]['kill'] += 1
+            self.kill_player(player_id)
+
+    def kill_player(self, player_id):
+        self.game_statistics[player_id]['death'] += 1
+        self.game_state.players_alive.remove(player_id)
+        self.game_state.players[player_id].hp = 0
+
+        data_packet = DataPacket(DataPacket.HEALTH_POINTS, 0)
+        self.send_packet_tcp(player_id, data_packet)
+
+        weapon_id = self.game_state.players[player_id].weapon_id
+        if weapon_id != -1:
+            weapon = self.game_state.weapons[weapon_id]
+            weapon.owner = None
+            response_data = {'owner_id': player_id,
+                             'weapon_id': weapon_id,
+                             'weapon_direction': weapon.direction,
+                             'weapon_position': (weapon.rect.x, weapon.rect.y),
+                             'weapon_ammo': weapon.ammo}
+            response = DataPacket(DataPacket.CLIENT_DROPPED_WEAPON, response_data)
+            for client_id in self.game_state.players.keys():
+                self.send_packet_tcp(client_id, response)
 
 
 async def main():
-    transport, protocol = await loop.create_datagram_endpoint(
-        lambda: UdpServerProtocol(),
-        local_addr=(server, udp_port))
-
-    tcp_server = await asyncio.start_server(accept_connection, server, tcp_port)
-
-    print("Server is up waiting...")
-
-    loop_task = asyncio.create_task(update_loop())
-    send_positions_task = asyncio.create_task(send_positions_loop(protocol))
-
-    await loop_task
-    await send_positions_task
-    async with tcp_server:
-        await tcp_server.serve_forever()
-
-    return
+    # noinspection PyUnusedLocal
+    game_session = await GameSession.create()
 
 
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    loop.set_debug(DEBUG)
-    loop.run_until_complete(main())
-    loop.run_forever()
+    asyncio.run(main(), debug=True)
