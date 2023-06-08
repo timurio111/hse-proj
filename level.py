@@ -190,7 +190,7 @@ class Tile(pygame.sprite.Sprite):
         self.mask = pygame.mask.from_surface(Tile.tile_images[self.image_id])
 
         self.timer = 0
-        self.delay = 0.2
+        self.delay = 0.15
 
     def visible(self, offset_x, offset_y, scale):
         return not (self.rect.bottom + offset_y <= 0 or self.rect.top + offset_y >= HEIGHT // scale or

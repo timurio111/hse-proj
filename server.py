@@ -21,7 +21,7 @@ udp_port = tcp_port + 1
 
 start_time = int(time.time())
 
-level_names = ['firstmap', 'pirate_island_map']
+level_names = ['pirate_ship_map', 'firstmap', 'pirate_island_map']
 
 
 class GameStatistics:
