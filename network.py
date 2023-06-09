@@ -74,7 +74,7 @@ class Network:
         self.udp_address = (self.server, self.udp_port)
 
         self.local_tcp_port = port + 2
-        self.local_tcp_address = ('localhost', self.local_tcp_port)
+        self.local_tcp_address = ('127.0.0.1', self.local_tcp_port)
 
         self.tcp_client_socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.tcp_client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -129,6 +129,8 @@ class Network:
             while True:
                 byte = sock.recv(1)
                 if byte == b'':
+                    if sock.getpeername() == self.local_tcp_address:
+                        raise Exception('Camera disconnected')
                     raise Exception('Disconnected')
                 if byte == DataPacket.delimiter_byte:
                     break

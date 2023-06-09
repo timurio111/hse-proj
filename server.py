@@ -15,9 +15,7 @@ DEBUG = True
 TICK_RATE = 240
 POSITIONS_SEND_RATE = 120
 
-server = "127.0.0.1"
-tcp_port = 5555
-udp_port = tcp_port + 1
+ADDRESS = ('127.0.0.1', 5555)
 
 start_time = int(time.time())
 
@@ -278,14 +276,18 @@ class ServerNetwork:
         self.id_to_last_udp_packet_time: dict[int, float] = {}
 
     @classmethod
-    async def create(cls, events_queue: asyncio.Queue):
+    async def create(cls, events_queue: asyncio.Queue, address: tuple[str, int]):
         self = ServerNetwork(events_queue)
-        await self.start()
+        await self.start(address)
 
         return self
 
     # noinspection PyAttributeOutsideInit
-    async def start(self):
+    async def start(self, address: tuple[str, int]):
+        server, port = address
+        tcp_port = port
+        udp_port = port + 1
+
         self.transport, self.protocol = await asyncio.get_running_loop().create_datagram_endpoint(
             protocol_factory=lambda: UdpServerProtocol(self.events_queue),
             local_addr=(server, udp_port)
@@ -370,17 +372,18 @@ class GameSession:
         self.events_queue: asyncio.Queue[ServerEvent] = asyncio.Queue()
         self.game_statistics = GameStatistics()
         self.game_state = GameState()
+        self.session_ended = False
 
     @classmethod
-    async def create(cls):
+    async def create(cls, address: tuple[str, int]):
         self = GameSession()
-        await self.start()
+        await self.start(address)
 
         return self
 
     # noinspection PyAttributeOutsideInit
-    async def start(self):
-        self.server_network = await ServerNetwork.create(self.events_queue)
+    async def start(self, address: tuple[str, int]):
+        self.server_network = await ServerNetwork.create(self.events_queue, address)
 
         events_handler = asyncio.create_task(self.events_listener())
         players_data_sender = asyncio.create_task(self.players_data_sender())
@@ -389,6 +392,8 @@ class GameSession:
         await events_handler
         await players_data_sender
         await game_state_updater
+
+
 
     def send_packet_tcp(self, client_id: int, data_packet: DataPacket, delay_seconds=0):
         data_packet.headers['game_id'] = self.game_state.level_id
@@ -405,14 +410,14 @@ class GameSession:
         self.events_queue.put_nowait(server_event)
 
     async def players_data_sender(self):
-        while True:
+        while not self.session_ended:
             server_event = ServerEvent(event_type=ServerEvent.SEND_PLAYERS_DATA)
             self.events_queue.put_nowait(server_event)
             await asyncio.sleep(1 / POSITIONS_SEND_RATE)
 
     async def game_state_updater(self):
         last_tick = time.time()
-        while True:
+        while not self.session_ended:
             time_delta = time.time() - last_tick
             last_tick = time.time()
 
@@ -422,7 +427,7 @@ class GameSession:
             await asyncio.sleep(1 / TICK_RATE)
 
     async def events_listener(self):
-        while True:
+        while not self.session_ended:
             server_event = await self.events_queue.get()
 
             if server_event.time > time.time():
@@ -431,7 +436,7 @@ class GameSession:
                 continue
 
             if server_event.event_type == ServerEvent.KILL_SERVER:
-                quit(0)  # TODO? сервер завершает работу после игры
+                self.session_ended = True
 
             if server_event.event_type == ServerEvent.ACCEPT_CONNECTION:
                 client_id: int = server_event['client_id']
@@ -750,10 +755,38 @@ class GameSession:
                 self.send_packet_tcp(client_id, response)
 
 
-async def main():
+async def start_session(address: tuple[str, int]):
     # noinspection PyUnusedLocal
-    game_session = await GameSession.create()
+    game_session = await GameSession.create(address)
+
+
+from multiprocessing import Process
+
+
+class ServerManager:
+    server_process: Process = Process()
+
+    @staticmethod
+    def run_server(address: tuple[str, int]):
+        asyncio.run(start_session(address), debug=DEBUG)
+
+    @staticmethod
+    def run_subprocess(address: tuple[str, int]):
+        ServerManager.kill_subprocess()
+        ServerManager.server_process = Process(target=ServerManager.run_server, args=(address,))
+        ServerManager.server_process.start()
+
+    @staticmethod
+    def kill_subprocess():
+        if ServerManager.server_process.is_alive():
+            ServerManager.server_process.kill()
+
+    @staticmethod
+    def check_server():
+        if ServerManager.server_process.exitcode:
+            ServerManager.server_process = Process()
+            raise Exception("Server upal")
 
 
 if __name__ == '__main__':
-    asyncio.run(main(), debug=True)
+    ServerManager.run_server(ADDRESS)

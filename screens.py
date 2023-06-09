@@ -1,5 +1,4 @@
 import os
-from string import Template
 
 import pygame.event
 
@@ -103,20 +102,26 @@ class StartServerMenu:
                                             text="",
                                             font='data/fonts/menu_font.ttf')
 
-        self.button_start_game = Button(size=(WIDTH // 5, 40),
-                                        pos=(WIDTH - WIDTH // 5 - 10, HEIGHT - 40 - 10),
-                                        text="Start server",
-                                        event=pygame.event.Event(CONNECT_TO_SERVER_EVENT, ))
+        self.button_start_server = Button(size=(WIDTH // 5, 40),
+                                          pos=(WIDTH - WIDTH // 5 - 10, HEIGHT - 40 - 10),
+                                          text="Start server",
+                                          event=pygame.event.Event(START_SERVER_AT_ADDRESS, ))
+
+        self.button_kill_server = Button(size=(WIDTH // 5, 40),
+                                         pos=(WIDTH - WIDTH // 5 - self.button_start_server.width - 10, HEIGHT - 40 - 10),
+                                         text="Kill server",
+                                         event=pygame.event.Event(KILL_SERVER))
 
     def event_handle(self, event):
         self.text_input_address.event_handle(event)
-        self.button_start_game.event.dict['input'] = self.text_input_address.text
+        self.button_start_server.event.dict['input'] = self.text_input_address.text
 
     def draw(self, screen: pygame.Surface):
         screen.blit(self.background, (0, 0))
         self.text_input_address.draw(screen, 1)
         self.button_back.draw(screen, 1)
-        self.button_start_game.draw(screen, 1)
+        self.button_start_server.draw(screen, 1)
+        self.button_kill_server.draw(screen, 1)
 
 
 class MessageScreen:

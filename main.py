@@ -1,32 +1,16 @@
 from __future__ import annotations
 
-import pygame
-
 import config
 from config import WIDTH, HEIGHT, MAX_FPS, FULLSCREEN
-from network import Network
-
-pygame.init()
-pygame.mixer.init()
-
-if FULLSCREEN:
-    config.HEIGHT = pygame.display.Info().current_h
-    config.WIDTH = pygame.display.Info().current_w
-    WIDTH = config.WIDTH
-    HEIGHT = config.HEIGHT
-    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
-
-else:
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
-
-clock = pygame.time.Clock()
-
 from event_codes import *
 from level import Level, Tile
+from network import Network
 from player import Player
-from weapon import Weapon, Bullet
 from screens import Menu, ConnectToServerMenu, LoadingScreen, MessageScreen, StartServerMenu, SettingsMenu, EndScreen
+from server import ServerManager
+from script_manager import ScriptManager
 from sound import SoundCore
+from weapon import Weapon, Bullet
 
 
 class Camera:
@@ -415,12 +399,16 @@ def validate_address(user_input):
 def main(screen):
     current_screen = Menu()
     game_manager = GameManager()
+    ScriptManager.run_subprocess()
+
     run = True
     SoundCore.main_menu_music.music_play()
     while run:
         clock.tick(MAX_FPS)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                ServerManager.kill_subprocess()
+                ScriptManager.kill_subprocess()
                 run = False
                 break
 
@@ -467,6 +455,17 @@ def main(screen):
                 SoundCore.server_connection_music.music_play()
                 current_screen = StartServerMenu()
 
+            if event.type == START_SERVER_AT_ADDRESS:
+                try:
+                    server, port = validate_address(event.dict['input'])
+                    ServerManager.run_subprocess((server, port))
+                except Exception as e:
+                    current_screen = MessageScreen(str(e), pygame.event.Event(OPEN_CONNECTION_MENU_EVENT))
+                    print(e)
+
+            if event.type == KILL_SERVER:
+                ServerManager.kill_subprocess()
+
             if event.type == OPEN_SETTINGS_MENU_EVENT:
                 current_screen = SettingsMenu()
 
@@ -492,15 +491,31 @@ def main(screen):
             if event.type == CHANGE_MUSIC_SLIDER:
                 SoundCore.change_music_loud(event.dict['value'])
         try:
+            ServerManager.check_server()
+            ScriptManager.check()
+
             current_screen.draw(screen)
         except Exception as e:
             current_screen = MessageScreen(str(e), pygame.event.Event(OPEN_MAIN_MENU_EVENT))
         pygame.display.set_caption(f"{int(clock.get_fps())} FPS")
         pygame.display.flip()
-
     pygame.mixer.quit()
     pygame.quit()
 
 
 if __name__ == "__main__":
+    pygame.init()
+    pygame.mixer.init()
+
+    if FULLSCREEN:
+        config.HEIGHT = pygame.display.Info().current_h
+        config.WIDTH = pygame.display.Info().current_w
+        WIDTH = config.WIDTH
+        HEIGHT = config.HEIGHT
+        screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
+
+    else:
+        screen = pygame.display.set_mode((WIDTH, HEIGHT))
+
+    clock = pygame.time.Clock()
     main(screen)
