@@ -16,6 +16,7 @@ GREEN = (0, 200, 64)
 YELLOW = (225, 225, 0)
 PINK = (230, 50, 230)
 
+
 def load_background(image_name: str) -> pygame.Surface:
     path = os.path.join("data", "Background", image_name)
     image = pygame.transform.scale(pygame.image.load(path), (WIDTH, HEIGHT))
@@ -195,6 +196,7 @@ class SettingsMenu:
                                 event=pygame.event.Event(CHANGE_MUSIC_MODE),
                                 text='Music off' if SoundCore.is_music_on else 'Music on',
                                 font='data/fonts/menu_font.ttf')
+
     def draw(self, screen: pygame.Surface):
         screen.blit(self.background, (0, 0))
         self.change_window_mode.draw(screen, 1)
@@ -202,21 +204,65 @@ class SettingsMenu:
         self.sounds_off.draw(screen, 1)
         self.return_back.draw(screen, 1)
 
+
+LISTOFCOORDS = ((WIDTH * 0.07, HEIGHT * 0.07), (WIDTH * 0.65, HEIGHT * 0.07), (WIDTH * 0.07, HEIGHT * 0.51), (WIDTH * 0.65, HEIGHT * 0.51))  # уберу потом
+
+
+class TextBlock:
+    STEP = HEIGHT//15
+    FONT = pygame.font.Font('data/fonts/menu_font.ttf', STEP)
+
+    def __init__(self, statistics, text='win:\nkill:\ndeath:\ndamage'):
+        self.text = text.split(':\n')
+        self.game_data = statistics
+        self.text_block = []
+
+    def get_text_player(self, player_id):
+        for i in range(len(self.text)):
+            if self.text[i] != 'damage':
+                self.text[i] += 's : ' + str(self.game_data[player_id][self.text[i]])
+            else:
+                self.text[i] += ' : ' + str(self.game_data[player_id][self.text[i]])
+            param = TextBlock.FONT.render(self.text[i], False, WHITE)
+            self.text_block.append(param)
+        return self.text_block
+
+    def draw(self, screen, player_id, coords):
+        block = self.get_text_player(player_id)
+        for i in range(len(block)):
+            line = block[i]
+            screen.blit(line, (coords[0], coords[1] + i * TextBlock.STEP))
+
+
+class PlayerCard:
+    CARDSIZE = (0.28 * WIDTH, 0.35 * HEIGHT)
+
+    def __init__(self, coords, statistics, player_id, winner_id, color):
+        self.coords = coords
+        self.player_card = pygame.Rect(coords + PlayerCard.CARDSIZE)
+        self.player_id = player_id
+        self.text = TextBlock(statistics)
+        self.color = color
+        self.b_winner = (winner_id == int(player_id))
+
+    def draw(self, screen):
+        pygame.draw.rect(screen, self.color, self.player_card)
+        if self.b_winner:
+            pygame.draw.rect(screen, YELLOW, self.player_card, 10)
+        self.text.draw(screen, self.player_id, self.coords)
+
+
 class EndScreen:
-    # это потом переделаю, пока искал константы
-    TABCOORD = (WIDTH * 0.01, HEIGHT * 0.05, WIDTH * 0.98, HEIGHT * 0.87)
-    PLAYERCOORD1 = (WIDTH * 0.02, HEIGHT * 0.07, WIDTH * 0.22, HEIGHT * 0.35)
-    PLAYERCOORD2 = (WIDTH * 0.77, HEIGHT * 0.07, WIDTH * 0.97, HEIGHT * 0.35)
-    PLAYERCOORD3 = (WIDTH * 0.02, HEIGHT * 0.07, WIDTH * 0.22, HEIGHT * 0.35)
-    PLAYERCOORD4 = (WIDTH * 0.02, HEIGHT * 0.07, WIDTH * 0.22, HEIGHT * 0.35)
-    GAMECOORD = (WIDTH * 0.25, HEIGHT * 0.1, WIDTH * 0.45, HEIGHT * 0.75)
+    TABCOORD = (WIDTH * 0.05, HEIGHT * 0.05, WIDTH * 0.90, HEIGHT * 0.90)
+    GAMECOORD = (WIDTH * 0.37, HEIGHT * 0.07, WIDTH * 0.26, HEIGHT * 0.80)
 
     def __init__(self, statistics):
         self.background = load_background('settings_menu.png')
         self.n_players = len(statistics.keys())
+        self.statistics = statistics['statistics']
+        self.colors = statistics['colors']
+        self.winner_id = statistics['winner']
         self.table = pygame.Rect(EndScreen.TABCOORD)
-        self.player_card1 = pygame.Rect(EndScreen.PLAYERCOORD1)
-        self.player_card2 = pygame.Rect(EndScreen.PLAYERCOORD2)
         self.game_card = pygame.Rect(EndScreen.GAMECOORD)
         self.button_back = Button(size=(WIDTH // 5, 30),
                                   pos=(WIDTH - WIDTH // 5 - 10, HEIGHT - 40),
@@ -225,8 +271,9 @@ class EndScreen:
 
     def draw(self, screen: pygame.Surface):
         screen.blit(self.background, (0, 0))
-        pygame.draw.rect(screen, WHITE, self.table)
-        pygame.draw.rect(screen, GRAY, self.player_card1)
-        pygame.draw.rect(screen, GRAY, self.player_card2)
+        # pygame.draw.rect(screen, WHITE, self.table)
+        for coord, player_id in enumerate(self.statistics.keys()):
+            player_card = PlayerCard(LISTOFCOORDS[coord], self.statistics, player_id, self.winner_id, self.colors[player_id])
+            player_card.draw(screen)
         pygame.draw.rect(screen, BLACK, self.game_card)
         self.button_back.draw(screen, 1)

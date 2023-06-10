@@ -9,7 +9,7 @@ ColorBlue = [49, 162, 242]
 ColorPurple = [175, 85, 221]
 ColorGreen = [0, 133, 74]
 
-Colors = [ColorWhite, ColorGray, ColorYellow, ColorBrown, ColorPink, ColorBlue, ColorPurple, ColorGreen]
+Colors = [ColorWhite, ColorGray, ColorBrown, ColorPink, ColorBlue, ColorPurple, ColorGreen]
 shuffle(Colors)
 
 
