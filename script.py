@@ -1,5 +1,6 @@
 import socket
 import time
+from selectors import DefaultSelector, EVENT_READ
 
 import cv2
 from ultralytics import YOLO
@@ -9,37 +10,55 @@ from network import DataPacket
 HOST = '127.0.0.1'
 PORT = 5557
 
+sel = DefaultSelector()
+sender = None
+
+
+def accept_connection(sock: socket.socket):
+    global sender
+
+    conn, addr = sock.accept()
+    sender = conn
+
+    sel.register(conn, EVENT_READ, data=None)
+
+
+def receive():
+    while True:
+        events = sel.select(timeout=0)
+        if not events:
+            return
+        for key, mask in events:
+            if key.data is None:
+                accept_connection(key.fileobj)
+
 
 def run():
-    print('Initializing...')
-
-    def raise_exception(exception_message):
-        response = DataPacket(DataPacket.WEBCAM_EXCEPTION)
-        response['data'] = exception_message
-        response.headers['game_id'] = -1
-        conn.send(response.encode())
-
-    model = YOLO('ml/Models/classify/train11/weights/best.pt')
-    cap = cv2.VideoCapture(0)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind((HOST, PORT))
     sock.listen(1)
+    sock.setblocking(False)
 
-    print('Waiting')
-    conn, addr = sock.accept()
-    print('Connected')
+    sel.register(sock, EVENT_READ, data=None)
+    def raise_exception(exception_message):
+        response = DataPacket(DataPacket.WEBCAM_EXCEPTION)
+        response['data'] = exception_message
+        response.headers['game_id'] = -1
+        if sender:
+            sender.send(response.encode())
 
-    response = DataPacket(DataPacket.WEBCAM_READY)
-    response.headers['game_id'] = -1
-    conn.send(response.encode())
+    model = YOLO('ml/Models/classify/train11/weights/best.pt')
+    cap = cv2.VideoCapture(0)
 
     frames_counter = 0
     cooldown = 0
     current_time = 0
 
     while cap.isOpened():
+        receive()
+
         try:
             ret, frame = cap.read()
         except Exception as e:
@@ -62,7 +81,11 @@ def run():
             print(f'FRAMES: {frames_counter}')
             response['data'] = 'hands up'
             response.headers['game_id'] = -1
-            conn.send(response.encode())
+            if sender:
+                try:
+                    sender.send(response.encode())
+                except Exception as e:
+                    print(e)
             frames_counter = 0
             cooldown = time.time()
 

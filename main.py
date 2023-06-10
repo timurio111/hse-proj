@@ -199,7 +199,6 @@ class GameManager:
         self.network: Network = None
         self.game: Game = None
         self.game_started = False
-        self.webcam_ready = False
 
     def connect(self, server, port):
         self.network = Network(server, port, self.callback)
@@ -207,9 +206,6 @@ class GameManager:
 
     def callback(self, data_packet: DataPacket, mask):
         game_id = data_packet.headers['game_id']
-
-        if data_packet.data_type == self.DataPacket.WEBCAM_READY:
-            self.webcam_ready = True
 
         if data_packet.data_type == self.DataPacket.WEBCAM_RESPONSE:
             data = data_packet['data']
@@ -375,8 +371,6 @@ class GameManager:
         self.packet_received = self.receive()
         if self.game is None:
             LoadingScreen().draw(screen)
-        elif not self.webcam_ready:
-            LoadingScreen(text='Waiting for webcam').draw(screen)
         else:
             self.handle_game_objects_collision()
             self.send_player_data()
