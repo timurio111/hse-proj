@@ -7,6 +7,7 @@ with open("config.yaml", "r") as stream:
         WIDTH, HEIGHT = map(int, data['APP']['RESOLUTION'].split('*'))
         MAX_FPS = data['APP']['MAX_FPS']
         FULLSCREEN = data['APP']['FULLSCREEN']
+        WEBCAM = data['APP']['WEBCAM']
     except yaml.YAMLError as exc:
         print(exc)
 

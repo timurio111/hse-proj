@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import config
-from config import WIDTH, HEIGHT, MAX_FPS, FULLSCREEN
+from config import WIDTH, HEIGHT, MAX_FPS, FULLSCREEN, WEBCAM
 from event_codes import *
 from level import Level, Tile
 from network import Network
@@ -410,7 +410,9 @@ def validate_address(user_input):
 def main(screen):
     current_screen = Menu()
     game_manager = GameManager()
-    ScriptManager.run_subprocess()
+
+    if WEBCAM:
+        ScriptManager.run_subprocess()
 
     run = True
     SoundCore.main_menu_music.music_play()
@@ -503,7 +505,8 @@ def main(screen):
                 SoundCore.change_music_loud(event.dict['value'])
         try:
             ServerManager.check_server()
-            ScriptManager.check()
+            if WEBCAM:
+                ScriptManager.check()
 
             current_screen.draw(screen)
         except Exception as e:
