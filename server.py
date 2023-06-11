@@ -464,8 +464,11 @@ class GameSession:
                 self.server_network.id_to_last_udp_packet_time.pop(client_id)
                 if client_id in self.game_state.players.keys():
                     self.game_state.players.pop(client_id)
+                if client_id in self.game_state.players_alive:
+                    self.game_state.players_alive.remove(client_id)
                 if client_id in self.server_network.id_to_udp_address.keys():
                     self.server_network.id_to_udp_address.pop(client_id)
+
 
                 print(f'client with id {client_id} disconnected')
                 writer.close()

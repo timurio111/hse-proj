@@ -96,6 +96,7 @@ class Network:
 
     def __del__(self):
         self.tcp_client_socket.close()
+        self.udp_client_socket.close()
 
     def authorize(self):
         if WEBCAM:
