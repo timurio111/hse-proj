@@ -28,6 +28,7 @@ class DataPacket:
     WEBCAM_RESPONSE = 19
     WEBCAM_EXCEPTION = 20
     WEBCAM_READY = 21
+    RELOAD_WEAPON = 22
 
     FLAG_READY = 100
 

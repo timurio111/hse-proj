@@ -7,8 +7,8 @@ from level import Level, Tile
 from network import Network
 from player import Player
 from screens import Menu, ConnectToServerMenu, LoadingScreen, MessageScreen, StartServerMenu, SettingsMenu, EndScreen
-from server import ServerManager
 from script_manager import ScriptManager
+from server import ServerManager
 from sound import SoundCore
 from weapon import Weapon, Bullet
 
@@ -210,7 +210,7 @@ class GameManager:
         if data_packet.data_type == self.DataPacket.WEBCAM_RESPONSE:
             data = data_packet['data']
             if data == 'hands up':
-                self.game.player.jump()
+                self.reload_weapon()
 
         if data_packet.data_type == self.DataPacket.WEBCAM_EXCEPTION:
             raise Exception(data_packet['data'])
@@ -258,6 +258,10 @@ class GameManager:
                 self.game.player.weapon.shoot()
             else:
                 self.game.players[client_id].weapon.shoot()
+
+        if data_packet.data_type == self.DataPacket.RELOAD_WEAPON:
+            weapon_id = data_packet['weapon_id']
+            self.game.weapons[weapon_id].reload()
 
         if data_packet.data_type == self.DataPacket.DELETE_BULLET_FROM_SERVER:
             bullet_id = data_packet.data
@@ -325,6 +329,19 @@ class GameManager:
             bullet_data = {'data': bullet.encode()}
             response = self.DataPacket(self.DataPacket.NEW_SHOT_FROM_CLIENT, bullet_data)
             self.send(response)
+
+    def reload_weapon(self):
+        if self.game.player.hp <= 0:
+            return
+        if self.game.player.weapon.name == "WeaponNone":
+            return
+        if self.game.player.weapon.ammo >= self.game.player.weapon.maximum_ammo():
+            return
+
+        self.game.player.weapon.sounds['reload'].sound_play()
+
+        response = self.DataPacket(self.DataPacket.RELOAD_WEAPON)
+        self.send(response)
 
     def pick_up_weapon(self):
         response = self.DataPacket(self.DataPacket.CLIENT_PICK_WEAPON_REQUEST)
