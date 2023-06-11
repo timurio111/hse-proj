@@ -192,6 +192,12 @@ class Weapon:
                 Weapon.all_weapons_info[self.name]['BARREL_OFFSET_Y']
         return x, y
 
+    def reload(self):
+        self.ammo = self.maximum_ammo()
+
+    def maximum_ammo(self):
+        return Weapon.all_weapons_info[self.name]['PATRONS']
+
     def draw(self, screen: pygame.Surface, offset_x, offset_y):
         if self.attached:
             weapon_position = self.get_position()

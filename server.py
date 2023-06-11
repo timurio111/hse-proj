@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from random import shuffle
+from random import shuffle, choice
 
 import pygame
 
@@ -15,11 +15,11 @@ DEBUG = True
 TICK_RATE = 240
 POSITIONS_SEND_RATE = 120
 
-server = "127.0.0.1"
-tcp_port = 5555
-udp_port = tcp_port + 1
+ADDRESS = ('127.0.0.1', 5555)
 
 start_time = int(time.time())
+
+level_names = ['pirate_ship_map', 'firstmap', 'pirate_island_map']
 
 
 class GameStatistics:
@@ -151,6 +151,9 @@ class ServerWeapon:
                 self.vy += dvy
                 self.vy = min(self.vy, 512)
 
+    def reload(self):
+        self.ammo = Weapon.all_weapons_info[self.name]['PATRONS']
+
     def get_center(self) -> tuple[int, int]:
         if self.direction == 'right':
             return self.rect.x + self.center_offset_x, self.rect.y + self.bottom_offset_y
@@ -276,14 +279,18 @@ class ServerNetwork:
         self.id_to_last_udp_packet_time: dict[int, float] = {}
 
     @classmethod
-    async def create(cls, events_queue: asyncio.Queue):
+    async def create(cls, events_queue: asyncio.Queue, address: tuple[str, int]):
         self = ServerNetwork(events_queue)
-        await self.start()
+        await self.start(address)
 
         return self
 
     # noinspection PyAttributeOutsideInit
-    async def start(self):
+    async def start(self, address: tuple[str, int]):
+        server, port = address
+        tcp_port = port
+        udp_port = port + 1
+
         self.transport, self.protocol = await asyncio.get_running_loop().create_datagram_endpoint(
             protocol_factory=lambda: UdpServerProtocol(self.events_queue),
             local_addr=(server, udp_port)
@@ -368,17 +375,18 @@ class GameSession:
         self.events_queue: asyncio.Queue[ServerEvent] = asyncio.Queue()
         self.game_statistics = GameStatistics()
         self.game_state = GameState()
+        self.session_ended = False
 
     @classmethod
-    async def create(cls):
+    async def create(cls, address: tuple[str, int]):
         self = GameSession()
-        await self.start()
+        await self.start(address)
 
         return self
 
     # noinspection PyAttributeOutsideInit
-    async def start(self):
-        self.server_network = await ServerNetwork.create(self.events_queue)
+    async def start(self, address: tuple[str, int]):
+        self.server_network = await ServerNetwork.create(self.events_queue, address)
 
         events_handler = asyncio.create_task(self.events_listener())
         players_data_sender = asyncio.create_task(self.players_data_sender())
@@ -403,14 +411,14 @@ class GameSession:
         self.events_queue.put_nowait(server_event)
 
     async def players_data_sender(self):
-        while True:
+        while not self.session_ended:
             server_event = ServerEvent(event_type=ServerEvent.SEND_PLAYERS_DATA)
             self.events_queue.put_nowait(server_event)
             await asyncio.sleep(1 / POSITIONS_SEND_RATE)
 
     async def game_state_updater(self):
         last_tick = time.time()
-        while True:
+        while not self.session_ended:
             time_delta = time.time() - last_tick
             last_tick = time.time()
 
@@ -420,7 +428,7 @@ class GameSession:
             await asyncio.sleep(1 / TICK_RATE)
 
     async def events_listener(self):
-        while True:
+        while not self.session_ended:
             server_event = await self.events_queue.get()
 
             if server_event.time > time.time():
@@ -429,7 +437,7 @@ class GameSession:
                 continue
 
             if server_event.event_type == ServerEvent.KILL_SERVER:
-                quit(0)  # TODO? сервер завершает работу после игры
+                self.session_ended = True
 
             if server_event.event_type == ServerEvent.ACCEPT_CONNECTION:
                 client_id: int = server_event['client_id']
@@ -542,6 +550,14 @@ class GameSession:
                 data = data_packet['data']
                 self.game_state.players[client_id].apply(data)
 
+        if data_packet.data_type == DataPacket.RELOAD_WEAPON:
+            weapon_id = self.game_state.players[client_id].weapon_id
+            self.game_state.weapons[weapon_id].reload()
+
+            response = DataPacket(DataPacket.RELOAD_WEAPON, {'weapon_id': weapon_id})
+            for client_id in self.game_state.players.keys():
+                self.send_packet_tcp(client_id, response)
+
         if data_packet.data_type == DataPacket.ADD_PLAYER_FLAG:
             self.game_state.players[client_id].flags.add(data_packet['data'])
 
@@ -650,8 +666,9 @@ class GameSession:
                 and not self.game_state.game_ended and len(self.game_state.players) > 1:
             self.game_state.game_ended = True
             self.game_state.game_started = True
+            level_name = choice(level_names)
             server_event = ServerEvent(event_type=ServerEvent.CHANGE_LEVEL,
-                                       data={'level_name': 'firstmap'},
+                                       data={'level_name': level_name},
                                        delay=2)
             self.events_queue.put_nowait(server_event)
             return
@@ -667,8 +684,9 @@ class GameSession:
                                            delay=1)
                 self.events_queue.put_nowait(server_event)
             else:
+                level_name = choice(level_names)
                 server_event = ServerEvent(event_type=ServerEvent.CHANGE_LEVEL,
-                                           data={'level_name': 'firstmap'},
+                                           data={'level_name': level_name},
                                            delay=1)
                 self.events_queue.put_nowait(server_event)
             return
@@ -684,8 +702,6 @@ class GameSession:
                 if GameState.STATUS_PLAYING not in self.game_state.players[client_id].flags:
                     continue
                 self.kill_player(client_id)
-                data_packet = DataPacket(DataPacket.HEALTH_POINTS, self.game_state.players[client_id].hp)
-                self.send_packet_tcp(client_id, data_packet)
 
         for bullet_id in list(self.game_state.bullets.keys()):
             bullet = self.game_state.bullets[bullet_id]
@@ -705,8 +721,6 @@ class GameSession:
                 if self.game_state.players[client_id].sprite_rect.collidepoint(bullet.get_position()):
                     self.damage_player(client_id, bullet)
 
-                    response = DataPacket(DataPacket.HEALTH_POINTS, self.game_state.players[client_id].hp)
-                    self.send_packet_tcp(client_id, response)
                     self.delete_bullet(bullet_id)
 
     def delete_bullet(self, bullet_id):
@@ -720,6 +734,10 @@ class GameSession:
         damage = min(bullet.damage, player.hp)
         self.game_statistics[bullet.owner]['damage'] += damage
         player.hp -= damage
+
+        response = DataPacket(DataPacket.HEALTH_POINTS, self.game_state.players[player_id].hp)
+        self.send_packet_tcp(player_id, response)
+
         if player.hp == 0:
             self.game_statistics[bullet.owner]['kill'] += 1
             self.kill_player(player_id)
@@ -727,6 +745,10 @@ class GameSession:
     def kill_player(self, player_id):
         self.game_statistics[player_id]['death'] += 1
         self.game_state.players_alive.remove(player_id)
+        self.game_state.players[player_id].hp = 0
+
+        data_packet = DataPacket(DataPacket.HEALTH_POINTS, 0)
+        self.send_packet_tcp(player_id, data_packet)
 
         weapon_id = self.game_state.players[player_id].weapon_id
         if weapon_id != -1:
@@ -742,10 +764,38 @@ class GameSession:
                 self.send_packet_tcp(client_id, response)
 
 
-async def main():
+async def start_session(address: tuple[str, int]):
     # noinspection PyUnusedLocal
-    game_session = await GameSession.create()
+    game_session = await GameSession.create(address)
+
+
+from multiprocessing import Process
+
+
+class ServerManager:
+    server_process: Process = Process()
+
+    @staticmethod
+    def run_server(address: tuple[str, int]):
+        asyncio.run(start_session(address), debug=DEBUG)
+
+    @staticmethod
+    def run_subprocess(address: tuple[str, int]):
+        ServerManager.kill_subprocess()
+        ServerManager.server_process = Process(target=ServerManager.run_server, args=(address,))
+        ServerManager.server_process.start()
+
+    @staticmethod
+    def kill_subprocess():
+        if ServerManager.server_process.is_alive():
+            ServerManager.server_process.kill()
+
+    @staticmethod
+    def check_server():
+        if ServerManager.server_process.exitcode:
+            ServerManager.server_process = Process()
+            raise Exception("Server upal")
 
 
 if __name__ == '__main__':
-    asyncio.run(main(), debug=True)
+    ServerManager.run_server(ADDRESS)

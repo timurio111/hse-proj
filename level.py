@@ -31,9 +31,21 @@ def load_map(name: str):
     image = pygame.image.load(image_source)
     tiles_images: list[pygame.Surface] = []
 
+    animations: dict[int, int] = dict()  # Какая картинка следует за текущей
+
+    for tile in tileset_xml_root.findall('tile'):
+        tile_id = int(tile.get('id'))
+        next_tile_id = int(tile.find('properties').find('property').get('value'))
+        animations[tile_id] = next_tile_id
+
     for i in range(image.get_height() // tileheight):
         for j in range(image.get_width() // tilewidth):
             tiles_images.append(image.subsurface(j * tilewidth, i * tileheight, tilewidth, tileheight))
+    tiles_images.append(pygame.Surface((tilewidth, tileheight)))  # Последний тайл (с id = -1) прозрачный
+    tiles_images[-1].set_colorkey((0, 0, 0))
+
+    Tile.tile_images = tiles_images
+    Tile.animations = animations
 
     map_width = int(map_xml_root.get('width'))
     map_height = int(map_xml_root.get('height'))
@@ -49,7 +61,8 @@ def load_map(name: str):
             tile_x = i % map_width
             tile_y = i // map_width
             tile = Tile(tilewidth * tile_x, tileheight * tile_y, tilewidth, tileheight,
-                        tile_id, tiles_images[tile_id - 1], has_collision)
+                        tile_id, tile_id - 1, has_collision)
+            tile.animated = (tile.image_id in animations.keys())
             tiles.append(tile)
         layers.append(Layer(has_collision, tiles))
 
@@ -96,6 +109,11 @@ class Level:
             for tile in layer.tiles:
                 if tile.distance(pos_x, pos_y) < self.radius and tile.visible(offset_x, offset_y, self.scale):
                     tile.draw(screen, offset_x, offset_y, self.scale)
+
+    def update(self, time_delta):
+        for layer in self.layers:
+            for tile in layer.tiles:
+                tile.update(time_delta)
 
     def collide_sprite(self, sprite: Collidable):
         collided = []
@@ -156,22 +174,42 @@ class Layer:
 
 
 class Tile(pygame.sprite.Sprite):
-    def __init__(self, x, y, width, height, tile_id, image: pygame.Surface, has_collision, name=None):
+    tile_images: list[pygame.Surface]
+    animations: dict[int, int]
+
+    def __init__(self, x, y, width, height, tile_id, image_id: int, has_collision):
         super().__init__()
 
         self.has_collision = has_collision
-        self.rect = pygame.Rect((x, y), (width, height))
+        self.animated = False
+
         self.tile_id = tile_id
-        self.image = image
-        self.name = name
-        self.mask = pygame.mask.from_surface(self.image)
+        self.image_id = image_id
+
+        self.rect = pygame.Rect((x, y), (width, height))
+        self.mask = pygame.mask.from_surface(Tile.tile_images[self.image_id])
+
+        self.timer = 0
+        self.delay = 0.15
 
     def visible(self, offset_x, offset_y, scale):
         return not (self.rect.bottom + offset_y <= 0 or self.rect.top + offset_y >= HEIGHT // scale or
                     self.rect.right + offset_x <= 0 or self.rect.left + offset_x >= WIDTH // scale)
 
+    def update(self, time_delta):
+        if not self.animated:
+            return
+
+        self.timer += time_delta
+        if self.timer < self.delay:
+            return
+
+        self.image_id = Tile.animations[self.image_id]
+        self.mask = pygame.mask.from_surface(Tile.tile_images[self.image_id])  # TODO надо ли?
+        self.timer = 0
+
     def distance(self, pos_x, pos_y):
         return ((pos_x - self.rect.x) ** 2 + (pos_y - self.rect.y) ** 2) ** 0.5
 
     def draw(self, screen: pygame.Surface, offset_x, offset_y, scale):
-        screen.blit(self.image, (self.rect.x + offset_x, self.rect.y + offset_y))
+        screen.blit(Tile.tile_images[self.image_id], (self.rect.x + offset_x, self.rect.y + offset_y))

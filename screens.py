@@ -1,11 +1,10 @@
 import os
-from string import Template
 
 import pygame.event
 
 from config import WIDTH, HEIGHT
 from event_codes import *
-from gui_elements import Button, TextInput
+from gui_elements import Button, TextInput, Slider, TextBox
 from sound import SoundCore
 
 WHITE = (255, 255, 255)
@@ -16,6 +15,7 @@ GREEN = (0, 200, 64)
 YELLOW = (225, 225, 0)
 PINK = (230, 50, 230)
 
+
 def load_background(image_name: str) -> pygame.Surface:
     path = os.path.join("data", "Background", image_name)
     image = pygame.transform.scale(pygame.image.load(path), (WIDTH, HEIGHT))
@@ -25,7 +25,7 @@ def load_background(image_name: str) -> pygame.Surface:
 class Menu:
     def __init__(self):
         self.visible = True
-        self.background = load_background("gradient2.png")
+        self.background = load_background("menu.png")
         self.button_start_server = Button(size=(WIDTH // 2, HEIGHT // 12),
                                           pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2),
                                           event=pygame.event.Event(START_SERVER_MENU_EVENT),
@@ -56,13 +56,13 @@ class Menu:
 
 class ConnectToServerMenu:
     def __init__(self):
-        self.background = load_background('gradient1.png')
+        self.background = load_background('connect_menu.png')
         self.button_back = Button(size=(WIDTH // 5, 40),
                                   pos=(10, 10),
                                   text="Back",
                                   event=pygame.event.Event(OPEN_MAIN_MENU_EVENT))
-        self.text_input_address = TextInput(size=(WIDTH // 1.1, 25),
-                                            pos=((WIDTH - WIDTH // 1.1) // 2, HEIGHT // 2),
+        self.text_input_address = TextInput(size=(WIDTH // 2, 25),
+                                            pos=((WIDTH - WIDTH // 2) // 2, HEIGHT // 2),
                                             hint="server address",
                                             text="",
                                             font='data/fonts/menu_font.ttf')
@@ -91,31 +91,37 @@ class ConnectToServerMenu:
 
 class StartServerMenu:
     def __init__(self):
-        self.background = load_background('gradient1.png')
+        self.background = load_background('connect_menu.png')
         self.button_back = Button(size=(WIDTH // 5, 40),
                                   pos=(10, 10),
                                   text="Back",
                                   event=pygame.event.Event(OPEN_MAIN_MENU_EVENT))
-        self.text_input_address = TextInput(size=(WIDTH // 1.1, 25),
-                                            pos=((WIDTH - WIDTH // 1.1) // 2, HEIGHT // 2),
+        self.text_input_address = TextInput(size=(WIDTH // 2, 25),
+                                            pos=((WIDTH - WIDTH // 2) // 2, HEIGHT // 2),
                                             hint="server address",
                                             text="",
                                             font='data/fonts/menu_font.ttf')
 
-        self.button_start_game = Button(size=(WIDTH // 5, 40),
-                                        pos=(WIDTH - WIDTH // 5 - 10, HEIGHT - 40 - 10),
-                                        text="Start server",
-                                        event=pygame.event.Event(CONNECT_TO_SERVER_EVENT, ))
+        self.button_start_server = Button(size=(WIDTH // 5, 40),
+                                          pos=(WIDTH - WIDTH // 5 - 10, HEIGHT - 40 - 10),
+                                          text="Start server",
+                                          event=pygame.event.Event(START_SERVER_AT_ADDRESS, ))
+
+        self.button_kill_server = Button(size=(WIDTH // 5, 40),
+                                         pos=(WIDTH - WIDTH // 5 - self.button_start_server.width - 10, HEIGHT - 40 - 10),
+                                         text="Kill server",
+                                         event=pygame.event.Event(KILL_SERVER))
 
     def event_handle(self, event):
         self.text_input_address.event_handle(event)
-        self.button_start_game.event.dict['input'] = self.text_input_address.text
+        self.button_start_server.event.dict['input'] = self.text_input_address.text
 
     def draw(self, screen: pygame.Surface):
         screen.blit(self.background, (0, 0))
         self.text_input_address.draw(screen, 1)
         self.button_back.draw(screen, 1)
-        self.button_start_game.draw(screen, 1)
+        self.button_start_server.draw(screen, 1)
+        self.button_kill_server.draw(screen, 1)
 
 
 class MessageScreen:
@@ -163,7 +169,7 @@ class LoadingScreen:
 class SettingsMenu:
     def __init__(self):
         self.visible = True
-        self.background = load_background("gradient2.png")
+        self.background = load_background("settings_menu.png")
         self.change_window_mode = Button(size=(WIDTH // 4.2, HEIGHT // 12),
                                          pos=(3 * WIDTH // 4 - WIDTH // 4.2, HEIGHT // 2 + 2 * HEIGHT // 8),
                                          event=pygame.event.Event(START_SERVER_MENU_EVENT),
@@ -174,33 +180,48 @@ class SettingsMenu:
                                 event=pygame.event.Event(CHANGE_MUSIC_MODE),
                                 text='Music off' if SoundCore.is_music_on else 'Music on',
                                 font='data/fonts/menu_font.ttf')
-        self.sounds_off = Button(size=(WIDTH // 2, HEIGHT // 12),
-                                 pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2),
 
-                                 event=pygame.event.Event(CHANGE_SOUND_MODE),
-                                 text='Sound off' if SoundCore.is_sound_on else 'Sound on', font='data/fonts/menu_font.ttf')
         self.return_back = Button(size=(WIDTH // 4.2, HEIGHT // 12),
                                   pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 + 2 * HEIGHT // 8),
                                   event=pygame.event.Event(OPEN_MAIN_MENU_EVENT),
                                   text="To Menu",
                                   font='data/fonts/menu_font.ttf')
+        self.music_textbox = TextBox(size=(WIDTH // 4, HEIGHT // 15),
+                                     pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 - HEIGHT // 8), text='Music volume',
+                                     font='data/fonts/menu_font.ttf')
+        self.music_slider = Slider(size=(WIDTH // 2.3, HEIGHT // 12),
+                                   pos=(WIDTH // 2 - WIDTH // 4.6, HEIGHT // 2 - HEIGHT // 20),
+                                   slider_color=(200, 200, 200), bar_color=(50, 50, 100),
+                                   event=pygame.event.Event(CHANGE_MUSIC_SLIDER))
+
+        self.sound_textbox = TextBox(size=(WIDTH // 4, HEIGHT // 15),
+                                     pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 + HEIGHT // 18), text='Sound volume',
+                                     font='data/fonts/menu_font.ttf')
+
+        self.sound_slider = Slider(size=(WIDTH // 2.3, HEIGHT // 12),
+                                   pos=(WIDTH // 2 - WIDTH // 4.6, HEIGHT // 2 + HEIGHT // 8),
+                                   slider_color=(200, 200, 200), bar_color=(50, 50, 100),
+                                   event=pygame.event.Event(CHANGE_SOUNDS_SLIDER))
+
+        self.music_slider.slider_pos = SoundCore.music_loud
+        self.sound_slider.slider_pos = SoundCore.sound_loud
 
     def buttons_update(self):
-        self.sounds_off = Button(size=(WIDTH // 2, HEIGHT // 12),
-                                 pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2),
-                                 event=pygame.event.Event(CHANGE_SOUND_MODE),
-                                 text='Sound off' if SoundCore.is_sound_on else 'Sound on', font='data/fonts/menu_font.ttf')
-        self.music_off = Button(size=(WIDTH // 2, HEIGHT // 12),
-                                pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 + HEIGHT // 8),
-                                event=pygame.event.Event(CHANGE_MUSIC_MODE),
-                                text='Music off' if SoundCore.is_music_on else 'Music on',
-                                font='data/fonts/menu_font.ttf')
+        pass
+
     def draw(self, screen: pygame.Surface):
         screen.blit(self.background, (0, 0))
         self.change_window_mode.draw(screen, 1)
-        self.music_off.draw(screen, 1)
-        self.sounds_off.draw(screen, 1)
         self.return_back.draw(screen, 1)
+        self.music_slider.draw(screen)
+        self.music_textbox.draw(screen)
+        self.sound_slider.draw(screen)
+        self.sound_textbox.draw(screen)
+
+    def event_handle(self, event):
+        self.music_slider.event_handle(event)
+        self.sound_slider.event_handle(event)
+
 
 class EndScreen:
     # это потом переделаю, пока искал константы
@@ -212,7 +233,7 @@ class EndScreen:
     GAMECOORD = (WIDTH * 0.25, HEIGHT * 0.1, WIDTH * 0.45, HEIGHT * 0.75)
 
     def __init__(self, statistics):
-        self.background = load_background('gradient2.png')
+        self.background = load_background('settings_menu.png')
         self.n_players = len(statistics.keys())
         self.table = pygame.Rect(EndScreen.TABCOORD)
         self.player_card1 = pygame.Rect(EndScreen.PLAYERCOORD1)
