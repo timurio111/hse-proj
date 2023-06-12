@@ -51,6 +51,7 @@ def load_map(name: str):
     map_height = int(map_xml_root.get('height'))
     scale = int(map_xml_root.find('properties').find('property').get('value'))
     layers: list[Layer] = []
+    animated_tiles: list[Tile] = []
 
     for layer in map_xml_root.findall('layer'):
         tiles: list[Tile] = []
@@ -63,6 +64,7 @@ def load_map(name: str):
             tile = Tile(tilewidth * tile_x, tileheight * tile_y, tilewidth, tileheight,
                         tile_id, tile_id - 1, has_collision)
             tile.animated = (tile.image_id in animations.keys())
+            animated_tiles.append(tile)
             tiles.append(tile)
         layers.append(Layer(has_collision, tiles))
 
@@ -90,7 +92,7 @@ def load_map(name: str):
     info['height'] = map_height
     info['tile_width'] = tilewidth
     info['tile_height'] = tileheight
-    return layers, objects, info
+    return layers, objects, info, animated_tiles
 
 
 class Collidable(Protocol):
@@ -100,20 +102,33 @@ class Collidable(Protocol):
 
 class Level:
     def __init__(self, name: str):
-        self.layers, self.objects, self.info = load_map(name)
+        self.layers, self.objects, self.info, self.animated_tiles = load_map(name)
         self.scale = self.info['scale']
         self.radius = 500
 
     def draw(self, screen: pygame.Surface, offset_x, offset_y, pos_x, pos_y):
+        visible_tiles = self.get_visible_tiles(offset_x, offset_y)
         for layer in self.layers:
-            for tile in layer.tiles:
-                if tile.distance(pos_x, pos_y) < self.radius and tile.visible(offset_x, offset_y, self.scale):
-                    tile.draw(screen, offset_x, offset_y, self.scale)
+            for tile_number in visible_tiles:
+                tile = layer.tiles[tile_number]
+                tile.draw(screen, offset_x, offset_y, self.scale)
 
     def update(self, time_delta):
-        for layer in self.layers:
-            for tile in layer.tiles:
-                tile.update(time_delta)
+        for tile in self.animated_tiles:
+            tile.update(time_delta)
+
+    def get_visible_tiles(self, offset_x, offset_y):
+        tile_numbers = []
+        i_start = int(max(0, -offset_y // (self.info['tile_height'])))
+        j_start = int(max(0, -offset_x // (self.info['tile_width'])))
+        i_end = int(min(self.info['height'], i_start + HEIGHT // (self.info['tile_height'] * self.scale) + 2))
+        j_end = int(min(self.info['width'], j_start + WIDTH // (self.info['tile_width'] * self.scale) + 2))
+        for i in range(i_start, i_end):
+            for j in range(j_start, j_end):
+                tile_number = int(i * self.info['width'] + j)
+                tile_numbers.append(tile_number)
+        print(len(tile_numbers))
+        return tile_numbers
 
     def collide_sprite(self, sprite: Collidable):
         collided = []
