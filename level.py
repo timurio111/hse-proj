@@ -127,7 +127,6 @@ class Level:
             for j in range(j_start, j_end):
                 tile_number = int(i * self.info['width'] + j)
                 tile_numbers.append(tile_number)
-        print(len(tile_numbers))
         return tile_numbers
 
     def collide_sprite(self, sprite: Collidable):
