@@ -19,7 +19,7 @@ ADDRESS = ('127.0.0.1', 5555)
 
 start_time = int(time.time())
 
-level_names = ['pirate_ship_map', 'firstmap', 'pirate_island_map']
+level_names = ['pirate_ship_map', 'firstmap', 'pirate_island_map', 'frozen_map']
 
 
 class GameStatistics:
