@@ -768,8 +768,9 @@ class GameSession:
                     continue
 
                 if self.game_state.players[client_id].sprite_rect.collidepoint(bullet.get_position()):
+                    if client_id == bullet.owner:
+                        continue
                     self.damage_player(client_id, bullet)
-
                     self.delete_bullet(bullet_id)
 
     def delete_bullet(self, bullet_id):

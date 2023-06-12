@@ -7,7 +7,6 @@ pygame.mixer.init()
 
 from config import WIDTH, HEIGHT, MAX_FPS, FULLSCREEN, WEBCAM
 from gui_elements import PlayerStat
-from network import Network
 from event_codes import *
 from level import Level, Tile
 from network import Network
@@ -357,6 +356,7 @@ class GameManager:
             return
 
         for bullet in bullets:
+            bullet.x = self.game.player.get_center_position()[0]
             bullet_data = {'data': bullet.encode()}
             response = self.DataPacket(self.DataPacket.NEW_SHOT_FROM_CLIENT, bullet_data)
             self.send(response)
