@@ -223,6 +223,66 @@ class SettingsMenu:
         self.sound_slider.event_handle(event)
 
 
+class PauseMenu:
+    def __init__(self):
+        self.visible = True
+        self.background = load_background("settings_menu.png")
+
+        self.label = TextBox(size=(WIDTH // 2, HEIGHT // 8),
+                             pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 15),
+                             text='Settings',
+                             font='data/fonts/menu_font.ttf')
+
+        self.music_off = Button(size=(WIDTH // 2, HEIGHT // 12),
+                                pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 + HEIGHT // 8),
+                                event=pygame.event.Event(CHANGE_MUSIC_MODE),
+                                text='Music off' if SoundCore.is_music_on else 'Music on',
+                                font='data/fonts/menu_font.ttf')
+
+        self.return_back = Button(size=(WIDTH // 4.2, HEIGHT // 12),
+                                  pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 + 2 * HEIGHT // 8),
+                                  event=pygame.event.Event(EXIT_GAME_TO_MENU),
+                                 text="Leave game",
+                                  font='data/fonts/menu_font.ttf')
+        self.music_textbox = TextBox(size=(WIDTH // 4, HEIGHT // 15),
+                                     pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 - HEIGHT // 8), text='Music volume',
+                                     font='data/fonts/menu_font.ttf')
+        self.music_slider = Slider(size=(WIDTH // 2.3, HEIGHT // 12),
+                                   pos=(WIDTH // 2 - WIDTH // 4.6, HEIGHT // 2 - HEIGHT // 20),
+                                   slider_color=(200, 200, 200), bar_color=(50, 50, 100),
+                                   event=pygame.event.Event(CHANGE_MUSIC_SLIDER))
+
+        self.sound_textbox = TextBox(size=(WIDTH // 4, HEIGHT // 15),
+                                     pos=(WIDTH // 2 - WIDTH // 4, HEIGHT // 2 + HEIGHT // 18), text='Sound volume',
+                                     font='data/fonts/menu_font.ttf')
+
+        self.sound_slider = Slider(size=(WIDTH // 2.3, HEIGHT // 12),
+                                   pos=(WIDTH // 2 - WIDTH // 4.6, HEIGHT // 2 + HEIGHT // 8),
+                                   slider_color=(200, 200, 200), bar_color=(50, 50, 100),
+                                   event=pygame.event.Event(CHANGE_SOUNDS_SLIDER))
+
+        self.music_slider.slider_pos = SoundCore.music_loud
+        self.sound_slider.slider_pos = SoundCore.sound_loud
+
+    def buttons_update(self):
+        pass
+
+    def draw(self, screen: pygame.Surface):
+        background = pygame.Surface((WIDTH // 1.8, HEIGHT), pygame.SRCALPHA)
+        background.fill((50, 55, 60, 240))
+        screen.blit(background, (WIDTH // 2 - WIDTH // 3.6, 0))
+        self.label.draw(screen)
+        self.return_back.draw(screen, 1)
+        self.music_slider.draw(screen)
+        self.music_textbox.draw(screen)
+        self.sound_slider.draw(screen)
+        self.sound_textbox.draw(screen)
+
+    def event_handle(self, event):
+        self.music_slider.event_handle(event)
+        self.sound_slider.event_handle(event)
+
+
 class EndScreen:
     # это потом переделаю, пока искал константы
     TABCOORD = (WIDTH * 0.01, HEIGHT * 0.05, WIDTH * 0.98, HEIGHT * 0.87)

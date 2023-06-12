@@ -5,6 +5,8 @@ import selectors
 import socket
 from time import time
 
+from config import WEBCAM
+
 
 class DataPacket:
     AUTH = 1
@@ -28,6 +30,7 @@ class DataPacket:
     WEBCAM_RESPONSE = 19
     WEBCAM_EXCEPTION = 20
     WEBCAM_READY = 21
+    RELOAD_WEAPON = 22
 
     FLAG_READY = 100
 
@@ -93,13 +96,15 @@ class Network:
 
     def __del__(self):
         self.tcp_client_socket.close()
+        self.udp_client_socket.close()
 
     def authorize(self):
-        try:
-            self.tcp_local_socket.connect(self.local_tcp_address)
-        except Exception as e:
-            print(e)
-            raise Exception('Failed to connect to the webcam')
+        if WEBCAM:
+            try:
+                self.tcp_local_socket.connect(self.local_tcp_address)
+            except Exception as e:
+                print(e)
+                raise Exception('Failed to connect to the webcam')
 
         try:
             self.tcp_client_socket.settimeout(5)
@@ -107,7 +112,6 @@ class Network:
         except Exception as e:
             print(e)
             raise Exception('Failed to connect to the server')
-
 
     def send_tcp(self, data_packet: DataPacket):
         self.tcp_client_socket.send(data_packet.encode())

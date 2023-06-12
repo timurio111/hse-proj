@@ -151,6 +151,9 @@ class ServerWeapon:
                 self.vy += dvy
                 self.vy = min(self.vy, 512)
 
+    def reload(self):
+        self.ammo = Weapon.all_weapons_info[self.name]['PATRONS']
+
     def get_center(self) -> tuple[int, int]:
         if self.direction == 'right':
             return self.rect.x + self.center_offset_x, self.rect.y + self.bottom_offset_y
@@ -393,8 +396,6 @@ class GameSession:
         await players_data_sender
         await game_state_updater
 
-
-
     def send_packet_tcp(self, client_id: int, data_packet: DataPacket, delay_seconds=0):
         data_packet.headers['game_id'] = self.game_state.level_id
         server_event = ServerEvent(event_type=ServerEvent.SEND_TCP,
@@ -463,8 +464,11 @@ class GameSession:
                 self.server_network.id_to_last_udp_packet_time.pop(client_id)
                 if client_id in self.game_state.players.keys():
                     self.game_state.players.pop(client_id)
+                if client_id in self.game_state.players_alive:
+                    self.game_state.players_alive.remove(client_id)
                 if client_id in self.server_network.id_to_udp_address.keys():
                     self.server_network.id_to_udp_address.pop(client_id)
+
 
                 print(f'client with id {client_id} disconnected')
                 writer.close()
@@ -548,6 +552,14 @@ class GameSession:
             if GameState.STATUS_PLAYING in self.game_state.players[client_id].flags:
                 data = data_packet['data']
                 self.game_state.players[client_id].apply(data)
+
+        if data_packet.data_type == DataPacket.RELOAD_WEAPON:
+            weapon_id = self.game_state.players[client_id].weapon_id
+            self.game_state.weapons[weapon_id].reload()
+
+            response = DataPacket(DataPacket.RELOAD_WEAPON, {'weapon_id': weapon_id})
+            for client_id in self.game_state.players.keys():
+                self.send_packet_tcp(client_id, response)
 
         if data_packet.data_type == DataPacket.ADD_PLAYER_FLAG:
             self.game_state.players[client_id].flags.add(data_packet['data'])
