@@ -54,7 +54,6 @@ def run():
 
     frames_counter = 0
     cooldown = 0
-    current_time = 0
 
     while cap.isOpened():
         receive()
