@@ -5,6 +5,7 @@ import pygame
 import config
 from config import WIDTH, HEIGHT, MAX_FPS, FULLSCREEN
 from network import Network
+from gui_elements import HpBar
 
 pygame.init()
 pygame.mixer.init()
@@ -216,6 +217,7 @@ class GameManager:
         self.game: Game = None
         self.game_started = False
         self.webcam_ready = False
+        self.hp_bar = HpBar(100)
 
     def connect(self, server, port):
         self.network = Network(server, port, self.callback)
@@ -397,6 +399,7 @@ class GameManager:
             self.handle_game_objects_collision()
             self.send_player_data()
             self.game.draw(screen)
+            self.hp_bar.draw(screen, {'value': self.game.player.hp})
 
 
 def validate_address(user_input):

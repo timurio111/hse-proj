@@ -205,11 +205,11 @@ class SettingsMenu:
         self.return_back.draw(screen, 1)
 
 
-LISTOFCOORDS = ((WIDTH * 0.07, HEIGHT * 0.07), (WIDTH * 0.65, HEIGHT * 0.07), (WIDTH * 0.07, HEIGHT * 0.51), (WIDTH * 0.65, HEIGHT * 0.51))  # уберу потом
+LISTOFCOORDS = ((WIDTH * 0.07, HEIGHT * 0.07), (WIDTH * 0.53, HEIGHT * 0.07), (WIDTH * 0.07, HEIGHT * 0.51), (WIDTH * 0.53, HEIGHT * 0.51))
 
 
 class TextBlock:
-    STEP = HEIGHT//15
+    STEP = HEIGHT // 12
     FONT = pygame.font.Font('data/fonts/menu_font.ttf', STEP)
 
     def __init__(self, statistics, text='win:\nkill:\ndeath:\ndamage'):
@@ -231,11 +231,11 @@ class TextBlock:
         block = self.get_text_player(player_id)
         for i in range(len(block)):
             line = block[i]
-            screen.blit(line, (coords[0], coords[1] + i * TextBlock.STEP))
+            screen.blit(line, (coords[0] + 10, coords[1] + i * TextBlock.STEP))
 
 
 class PlayerCard:
-    CARDSIZE = (0.28 * WIDTH, 0.35 * HEIGHT)
+    CARDSIZE = (0.4 * WIDTH, 0.35 * HEIGHT)
 
     def __init__(self, coords, statistics, player_id, winner_id, color):
         self.coords = coords
@@ -271,9 +271,7 @@ class EndScreen:
 
     def draw(self, screen: pygame.Surface):
         screen.blit(self.background, (0, 0))
-        # pygame.draw.rect(screen, WHITE, self.table)
         for coord, player_id in enumerate(self.statistics.keys()):
             player_card = PlayerCard(LISTOFCOORDS[coord], self.statistics, player_id, self.winner_id, self.colors[player_id])
             player_card.draw(screen)
-        pygame.draw.rect(screen, BLACK, self.game_card)
         self.button_back.draw(screen, 1)
