@@ -7,6 +7,7 @@ from config import WIDTH, HEIGHT
 RED = (255, 0, 0)
 GRAY = (125, 125, 125)
 YELLOW = (255, 255, 0)
+GREEN = (0, 255, 0)
 
 
 class TextInput:
@@ -201,21 +202,26 @@ class TextBox:
 
 
 class Bar:
-    BAR_SIZE = (100, 10)
+    BAR_SIZE = (WIDTH // 10, HEIGHT // 80)
     BAR_THICKNESS = 2
 
     def __init__(self, x, y, cur_value, max_value, color):
+        self.x = x
+        self.y = y
+        self.max_value = max_value
         self.bar_background = pygame.rect.Rect((x, y, Bar.BAR_SIZE[0], Bar.BAR_SIZE[1]))
-        self.bar = pygame.rect.Rect((x, y, Bar.BAR_SIZE[0] * cur_value/max_value, Bar.BAR_SIZE[1]))
+        self.bar = pygame.rect.Rect((x, y, Bar.BAR_SIZE[0] * cur_value / max_value, Bar.BAR_SIZE[1]))
         self.color = color
         self.current_value = cur_value
 
     def update(self, change):
-        self.current_value -= change['delta']
+        self.current_value = change['value']
+        self.bar = pygame.rect.Rect((self.x, self.y, Bar.BAR_SIZE[0] * self.current_value // self.max_value, Bar.BAR_SIZE[1]))
 
-    def draw(self, screen: pygame.Surface):
-        pygame.draw.rect(screen, self.color, self.bar_background, Bar.BAR_THICKNESS)
+    def draw(self, screen: pygame.Surface, change):
+        self.update(change)
         pygame.draw.rect(screen, self.color, self.bar)
+        pygame.draw.rect(screen, self.color, self.bar_background, Bar.BAR_THICKNESS)
 
 
 class HpBar(Bar):
@@ -225,7 +231,7 @@ class HpBar(Bar):
     RED_MARK = 30
 
     def __init__(self, cur_hp):
-        Bar.__init__(self, HpBar.HP_BAR_COORD[0], HpBar.HP_BAR_COORD[1], cur_hp, HpBar.MAX_HP, RED)
+        Bar.__init__(self, HpBar.HP_BAR_COORD[0], HpBar.HP_BAR_COORD[1], cur_hp, HpBar.MAX_HP, GREEN)
 
     def update(self, change):
         super().update(change)
@@ -233,24 +239,7 @@ class HpBar(Bar):
             self.color = YELLOW
         elif self.current_value < HpBar.RED_MARK:
             self.color = RED
+        else:
+            self.color = GREEN
 
 
-class AmmoBar(Bar):
-    AMMO_BAR_COORD = (21, 21)
-
-    def __init__(self, left_ammo, max_ammo):
-        Bar.__init__(self, AmmoBar.AMMO_BAR_COORD[0], AmmoBar.AMMO_BAR_COORD[1], left_ammo, max_ammo, GRAY)
-
-
-class OwnStat:
-    def __init__(self, player_data):
-        self.held_weapon = player_data['weapon']
-        self.max_ammo = Weapon.all_weapons_info[self.held_weapon]['PATRONS']
-        self.left_ammo = player_data['left_ammo']
-        self.current_hp = player_data['hp']
-        self.ammo_bar = AmmoBar(self.left_ammo, self.max_ammo)
-        self.hp_bar = HpBar(self.current_hp)
-
-    def draw(self, screen : pygame.Surface):
-        self.ammo_bar.draw(screen)
-        self.hp_bar.draw(screen)

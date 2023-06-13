@@ -25,6 +25,7 @@ level_names = ['pirate_ship_map', 'firstmap', 'pirate_island_map', 'frozen_map']
 class GameStatistics:
     def __init__(self):
         self.players_data = {}
+        self.data = {'colors': {}}
 
     def new_player(self, player_id: int):
         self.players_data[player_id] = {'kill': 0, 'death': 0, 'win': 0, 'damage': 0}
@@ -33,6 +34,11 @@ class GameStatistics:
         rating = list(self.players_data.keys())
         rating.sort(key=lambda player: (self[player]['win'], self[player]['kill'], -self[player]['death']), reverse=True)
         return rating
+
+    def get_data(self):
+        self.data['statistics'] = self.players_data
+        self.data['winner'] = self.sort_by_rating()[0]
+        return self.data
 
     def __getitem__(self, item):
         return self.players_data[item]
@@ -168,7 +174,7 @@ class GameState:
     STATUS_WAIT = 1
     STATUS_CONNECTED = 2
     STATUS_PLAYING = 3
-    MAX_LEVELS = 10
+    MAX_LEVELS = 3
 
     def __init__(self):
         self.level_id = 0
@@ -547,6 +553,7 @@ class GameSession:
             data = data_packet['data']
             self.game_state.players[client_id] = ServerPlayer.from_player_data(client_id, data)
             self.game_state.players[client_id].flags.add(GameState.STATUS_PLAYING)
+            self.game_statistics.data['colors'][client_id] = self.game_state.players[client_id].color
 
         if data_packet.data_type == DataPacket.CLIENT_PLAYER_INFO:
             if GameState.STATUS_PLAYING in self.game_state.players[client_id].flags:
@@ -650,7 +657,7 @@ class GameSession:
         if self.game_state.lastlevel:
             for player_id in self.game_state.players.keys():
                 response = DataPacket(data_type=DataPacket.DISCONNECT,
-                                      data={'statistics': self.game_statistics.players_data})
+                                      data={'statistics': self.game_statistics.get_data()})
                 self.send_packet_tcp(player_id, response, delay_seconds=5)
 
                 self.events_queue.put_nowait(ServerEvent(event_type=ServerEvent.KILL_SERVER, delay=6))

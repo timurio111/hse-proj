@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 import config
+
+pygame.init()
+pygame.mixer.init()
+
 from config import WIDTH, HEIGHT, MAX_FPS, FULLSCREEN, WEBCAM
+from gui_elements import HpBar
+from network import Network
 from event_codes import *
 from level import Level, Tile
 from network import Network
@@ -199,6 +205,10 @@ class GameManager:
         self.network: Network = None
         self.game: Game = None
         self.game_started = False
+
+        self.webcam_ready = False
+        self.hp_bar = HpBar(100)
+
         self.disconnected = True
         self.pause_menu_visible = False
         self.pause_menu = PauseMenu()
@@ -409,6 +419,8 @@ class GameManager:
             self.handle_game_objects_collision()
             self.send_player_data()
             self.game.draw(screen)
+            self.hp_bar.draw(screen, {'value': self.game.player.hp})
+            
             if self.pause_menu_visible:
                 self.pause_menu.draw(screen)
 
