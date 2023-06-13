@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import config
+import pygame
 
 pygame.init()
 pygame.mixer.init()
