@@ -1,4 +1,5 @@
 import os
+
 import pygame
 
 '''Как добавлять новые системные звуки:
@@ -27,7 +28,7 @@ except Exception as e:
 
 def load_weapon_sound(name, new_names_of_sound=[]):  # передаем название папки с оружием, на выходе - три звука: перезарядка, выстрел, холостой выстрел
     path = os.path.join('data', 'WeaponSprites', name, 'sound')
-    all_sounds = ['is_empty', 'shot'] + new_names_of_sound
+    all_sounds = ['is_empty', 'shot', 'reload'] + new_names_of_sound
     result = {}
 
     for sound_name in all_sounds:
@@ -52,6 +53,7 @@ class Sound:
 
     def sound_play(self):
         if pygame.mixer.get_init() and SoundCore.is_sound_on:
+            self.sound.set_volume(SoundCore.sound_loud)
             self.sound.play()
 
 
@@ -71,6 +73,9 @@ class SoundCore:
     is_sound_on = True if pygame.mixer.get_init() else False
     is_music_on = True if pygame.mixer.get_init() else False
     current_music = ''
+
+    music_loud = 0.3
+    sound_loud = 0.75
 
     # Музыка
     MAIN_MENU_MUSIC = 'menu_theme'
@@ -106,3 +111,12 @@ class SoundCore:
     @staticmethod
     def music_on():
         SoundCore.is_music_on = True
+
+    @staticmethod
+    def change_music_loud(value):
+        SoundCore.music_loud = value
+        pygame.mixer.music.set_volume(SoundCore.music_loud)
+
+    @staticmethod
+    def change_sounds_loud(value):
+        SoundCore.sound_loud = value
