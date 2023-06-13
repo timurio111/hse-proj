@@ -5,7 +5,7 @@ import selectors
 import socket
 from time import time
 
-from config import WEBCAM
+from config import WEBCAM, WEBCAM_SERVER_PORT
 
 
 class DataPacket:
@@ -77,7 +77,7 @@ class Network:
         self.udp_port = port + 1
         self.udp_address = (self.server, self.udp_port)
 
-        self.local_tcp_port = port + 2
+        self.local_tcp_port = WEBCAM_SERVER_PORT
         self.local_tcp_address = ('127.0.0.1', self.local_tcp_port)
 
         self.tcp_client_socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
