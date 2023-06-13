@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import pygame
 import config
 import pygame
 
@@ -232,6 +232,9 @@ class GameManager:
 
     def callback(self, data_packet: DataPacket, mask):
         game_id = data_packet.headers['game_id']
+
+        if data_packet.data_type == self.DataPacket.PING:
+            self.send(self.DataPacket(self.DataPacket.PING))
 
         if data_packet.data_type == self.DataPacket.WEBCAM_RESPONSE:
             data = data_packet['data']

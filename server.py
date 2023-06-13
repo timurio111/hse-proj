@@ -367,14 +367,17 @@ class ServerNetwork:
         _, writer = self.id_to_stream[client_id]
         writer.write(data_packet.encode())
         try:
-            await writer.drain()
-        except ConnectionResetError:
+            await asyncio.wait_for(writer.drain(), timeout=5)
+            print(f'sent {data_packet.encode()}')
+        except (ConnectionResetError, asyncio.TimeoutError):
             server_event = ServerEvent(event_type=ServerEvent.DISCONNECT_PLAYER,
                                        data={'client_id': client_id})
             self.events_queue.put_nowait(server_event)
 
     def send_udp(self, client_id: int, data_packet: DataPacket):
         data_packet.headers['time'] = round(time.time() - start_time, 3)
+        if client_id not in self.id_to_udp_address.keys():
+            return
         self.protocol.transport.sendto(data=data_packet.encode(),
                                        addr=self.id_to_udp_address[client_id])
 
@@ -386,6 +389,7 @@ class GameSession:
         self.events_queue: asyncio.Queue[ServerEvent] = asyncio.Queue()
         self.game_statistics = GameStatistics()
         self.game_state = GameState()
+        self.client_last_ping = dict()
         self.session_ended = False
 
     @classmethod
@@ -402,10 +406,12 @@ class GameSession:
         events_handler = asyncio.create_task(self.events_listener())
         players_data_sender = asyncio.create_task(self.players_data_sender())
         game_state_updater = asyncio.create_task(self.game_state_updater())
+        ping_players = asyncio.create_task(self.ping_players())
 
         await events_handler
         await players_data_sender
         await game_state_updater
+        await ping_players
 
     def send_packet_tcp(self, client_id: int, data_packet: DataPacket, delay_seconds=0):
         data_packet.headers['game_id'] = self.game_state.level_id
@@ -420,6 +426,12 @@ class GameSession:
                                    data={'client_id': client_id, 'packet': data_packet},
                                    delay=delay_seconds)
         self.events_queue.put_nowait(server_event)
+
+    async def ping_players(self):
+        while not self.session_ended:
+            for client_id in self.game_state.players.keys():
+                self.send_packet_tcp(client_id, DataPacket(DataPacket.PING))
+            await asyncio.sleep(1)
 
     async def players_data_sender(self):
         while not self.session_ended:
@@ -458,6 +470,7 @@ class GameSession:
 
                 self.server_network.id_to_stream[client_id] = (reader, writer)
                 self.server_network.stream_to_id[(reader, writer)] = client_id
+                self.client_last_ping[client_id] = time.time()
 
                 if self.game_state.game_started or len(self.game_state.players) >= 4:
                     response = DataPacket(data_type=DataPacket.GAME_ALREADY_STARTED)
@@ -468,6 +481,9 @@ class GameSession:
 
             if server_event.event_type == ServerEvent.DISCONNECT_PLAYER:
                 client_id: int = server_event['client_id']
+                if client_id not in self.server_network.id_to_udp_address.keys():
+                    continue
+
                 reader, writer = self.server_network.id_to_stream[client_id]
 
                 self.server_network.id_to_stream.pop(client_id)
@@ -479,11 +495,15 @@ class GameSession:
                     self.game_state.players_alive.remove(client_id)
                 if client_id in self.server_network.id_to_udp_address.keys():
                     self.server_network.id_to_udp_address.pop(client_id)
-
+                if client_id in self.client_last_ping.keys():
+                    self.client_last_ping.pop(client_id)
 
                 print(f'client with id {client_id} disconnected')
                 writer.close()
-                await writer.wait_closed()
+                try:
+                    await asyncio.wait_for(writer.wait_closed(), timeout=5)
+                except Exception as e:
+                    print(e)
 
             if server_event.event_type == ServerEvent.UPDATE_GAME_STATE:
                 time_delta = server_event['time_delta']
@@ -553,6 +573,9 @@ class GameSession:
 
         if client_id == -1:
             return
+
+        if data_packet.data_type == DataPacket.PING:
+            self.client_last_ping[client_id] = time.time()
 
         if data_packet.data_type == DataPacket.INITIAL_INFO:
             data = data_packet['data']
@@ -668,6 +691,12 @@ class GameSession:
                 self.events_queue.put_nowait(ServerEvent(event_type=ServerEvent.KILL_SERVER, delay=6))
 
     def update_game_state(self, time_delta):
+        for client_id in self.game_state.players.keys():
+            if time.time() - self.client_last_ping[client_id] > 10:
+                server_event = ServerEvent(event_type=ServerEvent.DISCONNECT_PLAYER,
+                                           data={'client_id': client_id})
+                self.events_queue.put_nowait(server_event)
+
         if not self.game_state.players:
             if self.game_state.level_name != 'lobby':
                 self.game_state.game_ended = False
