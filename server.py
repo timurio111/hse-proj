@@ -174,7 +174,7 @@ class GameState:
     STATUS_WAIT = 1
     STATUS_CONNECTED = 2
     STATUS_PLAYING = 3
-    MAX_LEVELS = 3
+    MAX_LEVELS = 10
 
     def __init__(self):
         self.level_id = 0
@@ -366,7 +366,12 @@ class ServerNetwork:
     async def send_tcp(self, client_id: int, data_packet: DataPacket):
         _, writer = self.id_to_stream[client_id]
         writer.write(data_packet.encode())
-        await writer.drain()
+        try:
+            await writer.drain()
+        except ConnectionResetError:
+            server_event = ServerEvent(event_type=ServerEvent.DISCONNECT_PLAYER,
+                                       data={'client_id': client_id})
+            self.events_queue.put_nowait(server_event)
 
     def send_udp(self, client_id: int, data_packet: DataPacket):
         data_packet.headers['time'] = round(time.time() - start_time, 3)
