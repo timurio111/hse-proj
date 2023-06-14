@@ -77,7 +77,7 @@ def run():
         current_time = time.time()
         if current_status == 'debuffed' and (current_time - cooldown) >= 3:
             frames_counter += 1
-        if frames_counter >= 25:
+        if frames_counter >= 18:
             response = DataPacket(DataPacket.WEBCAM_RESPONSE)
             response['data'] = 'hands up'
             response.headers['game_id'] = -1
