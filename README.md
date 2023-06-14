@@ -19,9 +19,9 @@ over the crowd and
 gain a following by blasting your armored friends with Shotguns, Rifles and Pistols. Few hits and you're DEAD. This
 is KNIGHT GAME. Don't blink.
 
-- 2 to 4 PLAYERS in either Local Multiplayer, or Online Play!
+- 2 to 4 PLAYERS in Local Multiplayer!
 Easy to pick up, emphasizing strategy over twitch reaction
-- 4 Levels + Ability to create your own, 3 Weapons
+- 4 Levels, 3 Weapons
 - Exciting gameplay
 
 ### Controls:
