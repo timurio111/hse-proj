@@ -372,9 +372,9 @@ class ServerNetwork:
         _, writer = self.id_to_stream[client_id]
         writer.write(data_packet.encode())
         try:
-            await asyncio.wait_for(writer.drain(), timeout=5)
+            await writer.drain()
             print(f'sent {data_packet.encode()}')
-        except (ConnectionResetError, asyncio.TimeoutError):
+        except ConnectionResetError:
             server_event = ServerEvent(event_type=ServerEvent.DISCONNECT_PLAYER,
                                        data={'client_id': client_id})
             self.events_queue.put_nowait(server_event)

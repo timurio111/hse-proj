@@ -30,8 +30,8 @@ Easy to pick up, emphasizing strategy over twitch reaction
 
 | Buttons | Action | | Buttons                     | Action                  |
 | --- | --- | --- |-----------------------------|-------------------------|
-| `A` / `left` | move left | | `J`                         | pick up / drop a weapon |
-| `D` / `right` | move right | | `Enter`                     | shoot                   |
+| `A` | move left | | `J`                         | pick up / drop a weapon |
+| `D` | move right | | `Enter`                     | shoot                   |
 | `Space`                     | jump | | `Show hands to your webcam` | reload weapon           |
 | `Esc` | open the game menu during a match | |
 
@@ -52,14 +52,9 @@ pip install -r requirements.txt
 to the terminal
 
 So, if you are fine with previous steps, then you are almost up to play!
-Now you have to start two ***.py files in the following order:
+Now you have to start main.py
 
-- script.py
-- main.py
-
-And one of you has to configure (set custom address (don`t touch it if you want to play on the localhost) in the 18th line of server.py) and start 
-
-- server.py
+And one of you has to run server in the local network
 
 The last step you have to do is set up your webcam right in front of your face and make sure both of your palms
 fit into the frame.

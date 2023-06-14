@@ -203,7 +203,7 @@ class TextBox:
 
 
 class Bar:
-    BAR_SIZE = (WIDTH // 3, HEIGHT // 20)
+    BAR_SIZE = (WIDTH // 5, HEIGHT // 30)
     BAR_THICKNESS = 5
 
     def __init__(self, x, y, cur_value, max_value, color):
@@ -244,7 +244,7 @@ class HpBar(Bar):
 
 
 def get_bullet(n: int, w: int):
-    coord = (HpBar.HP_BAR_COORD[0], HpBar.HP_BAR_COORD[1] + HEIGHT // 12)
+    coord = (HpBar.HP_BAR_COORD[0], HpBar.HP_BAR_COORD[1] + HEIGHT // 25)
     for i in range(n):
         yield coord
         coord = (coord[0] + w + 2, coord[1])
@@ -253,8 +253,8 @@ def get_bullet(n: int, w: int):
 class Bullets:
 
     def __init__(self):
-        self.bullet = (WIDTH // 64, HEIGHT // 14)
-        self.bullet_case = (WIDTH // 64, HEIGHT // 48)
+        self.bullet = (WIDTH // 128, HEIGHT // 28)
+        self.bullet_case = (WIDTH // 128, HEIGHT // 96)
         self.bullets = None
 
     def draw_n_bullets(self, screen, left_ammo, max_ammo, color):
@@ -269,8 +269,8 @@ class Bullets:
 
 
 class AmmoBar:
-    STEP = HEIGHT//12
-    AMMO_BAR_COORDS = (HpBar.HP_BAR_COORD[0], HpBar.HP_BAR_COORD[1] + STEP)
+    STEP = HEIGHT//25
+    AMMO_BAR_COORDS = (HpBar.HP_BAR_COORD[0], HpBar.HP_BAR_COORD[1] + HEIGHT // 25)
     TEXT = 'Hands Up'
     TEXT1 = 'Find Weapon'
 

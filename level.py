@@ -87,6 +87,7 @@ def load_map(name: str):
                     GameObjectRect(int(float(x)), int(float(y)), int(float(width)), int(float(height)), object_name))
 
     info = dict()
+    info['name'] = name
     info['scale'] = scale
     info['width'] = map_width
     info['height'] = map_height
