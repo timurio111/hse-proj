@@ -5,10 +5,11 @@ from selectors import DefaultSelector, EVENT_READ
 import cv2
 from ultralytics import YOLO
 
+from config import WEBCAM_SERVER_PORT
 from network import DataPacket
 
 HOST = '127.0.0.1'
-PORT = 5557
+PORT = WEBCAM_SERVER_PORT
 
 sel = DefaultSelector()
 sender = None
@@ -34,7 +35,6 @@ def receive():
 
 
 def run():
-
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind((HOST, PORT))
@@ -42,6 +42,7 @@ def run():
     sock.setblocking(False)
 
     sel.register(sock, EVENT_READ, data=None)
+
     def raise_exception(exception_message):
         response = DataPacket(DataPacket.WEBCAM_EXCEPTION)
         response['data'] = exception_message

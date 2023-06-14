@@ -5,7 +5,7 @@ import selectors
 import socket
 from time import time
 
-from config import WEBCAM
+from config import WEBCAM, WEBCAM_SERVER_PORT
 
 
 class DataPacket:
@@ -31,6 +31,7 @@ class DataPacket:
     WEBCAM_EXCEPTION = 20
     WEBCAM_READY = 21
     RELOAD_WEAPON = 22
+    PING = 23
 
     FLAG_READY = 100
 
@@ -76,7 +77,7 @@ class Network:
         self.udp_port = port + 1
         self.udp_address = (self.server, self.udp_port)
 
-        self.local_tcp_port = port + 2
+        self.local_tcp_port = WEBCAM_SERVER_PORT
         self.local_tcp_address = ('127.0.0.1', self.local_tcp_port)
 
         self.tcp_client_socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -96,6 +97,7 @@ class Network:
 
     def __del__(self):
         self.tcp_client_socket.close()
+        self.udp_client_socket.close()
 
     def authorize(self):
         if WEBCAM:
