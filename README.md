@@ -1,8 +1,6 @@
 # Knight game
 
-### Gameplay trailer
-
-[![Gameplay trailer](data/Background/connect_menu.png)](https://youtu.be/m4Olnpmot30)
+### Gameplay trailer : [link](https://youtu.be/m4Olnpmot30)
 
 ### In-game screenshots:
 
