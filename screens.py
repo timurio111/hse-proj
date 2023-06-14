@@ -290,12 +290,12 @@ LISTOFCOORDS = ((WIDTH * 0.07, HEIGHT * 0.07), (WIDTH * 0.53, HEIGHT * 0.07), (W
 
 class TextBlock:
     STEP = HEIGHT // 12
-    FONT = pygame.font.Font('data/fonts/menu_font.ttf', STEP)
 
     def __init__(self, statistics, text='win:\nkill:\ndeath:\ndamage'):
         self.text = text.split(':\n')
         self.game_data = statistics
         self.text_block = []
+        self.font = pygame.font.Font('data/fonts/menu_font.ttf', TextBlock.STEP)
 
     def get_text_player(self, player_id):
         for i in range(len(self.text)):
@@ -303,7 +303,7 @@ class TextBlock:
                 self.text[i] += 's : ' + str(self.game_data[player_id][self.text[i]])
             else:
                 self.text[i] += ' : ' + str(self.game_data[player_id][self.text[i]])
-            param = TextBlock.FONT.render(self.text[i], False, WHITE)
+            param = TextBlock.self.font.render(self.text[i], False, WHITE)
             self.text_block.append(param)
         return self.text_block
 
