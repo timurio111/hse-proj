@@ -2,14 +2,20 @@
 
 ### Gameplay trailer
 
-[![Gameplay trailer](data/Background/connect_menu.png)](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
+[![Gameplay trailer](data/Background/connect_menu.png)](https://youtu.be/m4Olnpmot30)
 
 ### In-game screenshots:
 
 <div style="text-align: center;">
     <img src="data/Readme/Screenshot_1.png" style="margin-bottom: 10px;" />
     <img src="data/Readme/Screenshot_2.png" style="margin-bottom: 10px;" />
-    <img src="data/Readme/settings.png" />
+    <img alt="gameplay" src="data/Readme/togif1.gif" style="width:850px;"/>
+</div>
+
+### Reloading via showing hands to webcam
+
+<div style="text-align: center;">
+    <img alt="reloading via showing hands to webcam" src="data/Readme/togif2.gif" style="width:850px;"/> 
 </div>
 
 ### Project Description
@@ -20,7 +26,7 @@ gain a following by blasting your armored friends with Shotguns, Rifles and Pist
 is KNIGHT GAME. Don't blink.
 
 - 2 to 4 PLAYERS in either Local Multiplayer, or Online Play!
-Easy to pick up, emphasizing strategy over twitch reaction
+  Easy to pick up, emphasizing strategy over twitch reaction
 - 4 Levels + Ability to create your own, 3 Weapons
 - Exciting gameplay
 
