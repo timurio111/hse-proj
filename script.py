@@ -66,7 +66,6 @@ def run():
             break
 
         results = model(frame, verbose=False)
-        names_dict = results[0].names
         hands_up = float(results[0].probs.data[0])
         current_status = 'normal'
         print(f'hands_up confidence: {hands_up}')

@@ -56,6 +56,7 @@
    <property name="next_tile_id" type="int" value="7"/>
   </properties>
  </tile>
+
  <tile id="200">
   <properties>
    <property name="next_tile_id" type="int" value="8"/>
@@ -71,6 +72,7 @@
    <property name="next_tile_id" type="int" value="94"/>
   </properties>
  </tile>
+
  <tile id="319">
   <properties>
    <property name="next_tile_id" type="int" value="127"/>

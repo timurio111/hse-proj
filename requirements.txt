@@ -8,17 +8,8 @@ opencv-python>=4.6.0
 Pillow>=7.1.2
 PyYAML>=5.3.1
 requests>=2.23.0
-scipy>=1.4.1
-torch>=1.7.0
 torchvision>=0.8.1
 tqdm>=4.64.0
-tensorboard>=2.13.0
-clearml
-comet
 pandas>=1.1.4
-seaborn>=0.11.0
-scikit-learn==0.19.2  # CoreML quantization
-psutil  # system utilization
-pycocotools>=2.0.6  # COCO mAP
 numpy~=1.24.3
 ultralytics~=8.0.113
