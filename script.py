@@ -14,14 +14,15 @@ PORT = WEBCAM_SERVER_PORT
 sel = DefaultSelector()
 sender = None
 
+connections = []
+
 
 def accept_connection(sock: socket.socket):
     global sender
 
     conn, addr = sock.accept()
+    connections.append(sender)
     sender = conn
-
-    sel.register(conn, EVENT_READ, data=None)
 
 
 def receive():
@@ -32,6 +33,8 @@ def receive():
         for key, mask in events:
             if key.data is None:
                 accept_connection(key.fileobj)
+            else:
+                pass
 
 
 def run():

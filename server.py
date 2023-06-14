@@ -35,9 +35,14 @@ class GameStatistics:
         rating.sort(key=lambda player: (self[player]['win'], self[player]['kill'], -self[player]['death']), reverse=True)
         return rating
 
-    def get_data(self):
-        self.data['statistics'] = self.players_data
+    def get_data(self, players_id: list[int]):
+        statistics = {}
+        for player_id in players_id:
+            if player_id in self.players_data.keys():
+                statistics[player_id] = self.players_data[player_id]
+        self.data['statistics'] = statistics
         self.data['winner'] = self.sort_by_rating()[0]
+
         return self.data
 
     def __getitem__(self, item):
@@ -685,7 +690,7 @@ class GameSession:
         if self.game_state.lastlevel:
             for player_id in self.game_state.players.keys():
                 response = DataPacket(data_type=DataPacket.DISCONNECT,
-                                      data={'statistics': self.game_statistics.get_data()})
+                                      data={'statistics': self.game_statistics.get_data(list(self.game_state.players.keys()))})
                 self.send_packet_tcp(player_id, response, delay_seconds=5)
 
                 self.events_queue.put_nowait(ServerEvent(event_type=ServerEvent.KILL_SERVER, delay=6))
