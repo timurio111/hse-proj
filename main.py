@@ -1,33 +1,22 @@
 from __future__ import annotations
 
-import pygame
-
 import config
-from config import WIDTH, HEIGHT, MAX_FPS, FULLSCREEN
-from network import Network
-from gui_elements import PlayerStat
 
 pygame.init()
 pygame.mixer.init()
 
-if FULLSCREEN:
-    config.HEIGHT = pygame.display.Info().current_h
-    config.WIDTH = pygame.display.Info().current_w
-    WIDTH = config.WIDTH
-    HEIGHT = config.HEIGHT
-    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
-
-else:
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
-
-clock = pygame.time.Clock()
-
+from config import WIDTH, HEIGHT, MAX_FPS, FULLSCREEN, WEBCAM
+from gui_elements import HpBar
+from network import Network
 from event_codes import *
 from level import Level, Tile
+from network import Network
 from player import Player
-from weapon import Weapon, Bullet
-from screens import Menu, ConnectToServerMenu, LoadingScreen, MessageScreen, StartServerMenu, SettingsMenu, EndScreen
+from screens import Menu, ConnectToServerMenu, LoadingScreen, MessageScreen, StartServerMenu, SettingsMenu, EndScreen, PauseMenu
+from script_manager import ScriptManager
+from server import ServerManager
 from sound import SoundCore
+from weapon import Weapon, Bullet
 
 
 class Camera:
@@ -86,7 +75,6 @@ class Game:
         self.players: dict[int, Player] = {}
         self.bullets: dict[int, Bullet] = {}
         self.weapons: dict[int, Weapon] = {}
-        self.player_bar = PlayerStat(self.player.weapon.ammo, self.player.weapon.name, 100)
 
         self.camera = Camera(self.player)
 
@@ -107,7 +95,6 @@ class Game:
         self.input_handle(time_delta)
         self.camera.update(time_delta)
         self.level.update(time_delta)
-        self.player_bar.update({'value': self.player.hp, 'weapon_name': self.player.weapon.name, 'left_ammo': self.player.weapon.ammo})
 
         for weapon_id, weapon in self.weapons.items():
             weapon.update(time_delta, self.level)
@@ -140,7 +127,6 @@ class Game:
 
         image = pygame.transform.scale_by(image, self.level.scale)
         screen.blit(image, (0, 0))
-        self.player_bar.draw(screen, self.player.color)
 
     def input_handle(self, time_delta):
         keys = pygame.key.get_pressed()
@@ -219,23 +205,37 @@ class GameManager:
         self.network: Network = None
         self.game: Game = None
         self.game_started = False
+
         self.webcam_ready = False
         self.hp_bar = HpBar(100)
+
+        self.disconnected = True
+        self.pause_menu_visible = False
+        self.pause_menu = PauseMenu()
 
     def connect(self, server, port):
         self.network = Network(server, port, self.callback)
         self.network.authorize()
+        self.disconnected = False
+
+    def disconnect(self):
+        try:
+            self.network.tcp_client_socket.close()
+        except OSError as e:
+            print(e)
+        try:
+            self.network.udp_client_socket.close()
+        except OSError as e:
+            print(e)
+        self.disconnected = True
 
     def callback(self, data_packet: DataPacket, mask):
         game_id = data_packet.headers['game_id']
 
-        if data_packet.data_type == self.DataPacket.WEBCAM_READY:
-            self.webcam_ready = True
-
         if data_packet.data_type == self.DataPacket.WEBCAM_RESPONSE:
             data = data_packet['data']
             if data == 'hands up':
-                self.game.player.jump()
+                self.reload_weapon()
 
         if data_packet.data_type == self.DataPacket.WEBCAM_EXCEPTION:
             raise Exception(data_packet['data'])
@@ -283,6 +283,10 @@ class GameManager:
                 self.game.player.weapon.shoot()
             else:
                 self.game.players[client_id].weapon.shoot()
+
+        if data_packet.data_type == self.DataPacket.RELOAD_WEAPON:
+            weapon_id = data_packet['weapon_id']
+            self.game.weapons[weapon_id].reload()
 
         if data_packet.data_type == self.DataPacket.DELETE_BULLET_FROM_SERVER:
             bullet_id = data_packet.data
@@ -351,6 +355,19 @@ class GameManager:
             response = self.DataPacket(self.DataPacket.NEW_SHOT_FROM_CLIENT, bullet_data)
             self.send(response)
 
+    def reload_weapon(self):
+        if self.game.player.hp <= 0:
+            return
+        if self.game.player.weapon.name == "WeaponNone":
+            return
+        if self.game.player.weapon.ammo >= self.game.player.weapon.maximum_ammo():
+            return
+
+        self.game.player.weapon.sounds['reload'].sound_play()
+
+        response = self.DataPacket(self.DataPacket.RELOAD_WEAPON)
+        self.send(response)
+
     def pick_up_weapon(self):
         response = self.DataPacket(self.DataPacket.CLIENT_PICK_WEAPON_REQUEST)
         self.send(response)
@@ -382,6 +399,8 @@ class GameManager:
         self.send(response)
 
     def send(self, data_packet):
+        if self.disconnected:
+            return
         data_packet.headers['id'] = self.network.id
         data_packet.headers['game_id'] = self.game_id
         if data_packet.data_type == self.DataPacket.CLIENT_PLAYER_INFO:
@@ -396,12 +415,28 @@ class GameManager:
         self.packet_received = self.receive()
         if self.game is None:
             LoadingScreen().draw(screen)
-        elif not self.webcam_ready:
-            LoadingScreen(text='Waiting for webcam').draw(screen)
         else:
             self.handle_game_objects_collision()
             self.send_player_data()
             self.game.draw(screen)
+            self.hp_bar.draw(screen, {'value': self.game.player.hp})
+            
+            if self.pause_menu_visible:
+                self.pause_menu.draw(screen)
+
+    def event_handle(self, event):
+        if self.pause_menu_visible:
+            self.pause_menu.event_handle(event)
+        if event.type == pygame.KEYDOWN:
+            if self.game_started and self.game.player.hp > 0:
+                if event.key == pygame.K_j:
+                    if self.game.player.weapon.name == 'WeaponNone':
+                        self.pick_up_weapon()
+                    else:
+                        self.drop_weapon()
+            if event.key == pygame.K_ESCAPE:
+                self.pause_menu_visible = not self.pause_menu_visible
+                self.pause_menu = PauseMenu()
 
 
 def validate_address(user_input):
@@ -420,26 +455,28 @@ def validate_address(user_input):
 def main(screen):
     current_screen = Menu()
     game_manager = GameManager()
+
+    if WEBCAM:
+        ScriptManager.run_subprocess()
+
     run = True
     SoundCore.main_menu_music.music_play()
     while run:
         clock.tick(MAX_FPS)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                ServerManager.kill_subprocess()
+                ScriptManager.kill_subprocess()
                 run = False
                 break
-
-            if event.type == pygame.KEYDOWN:
-                if game_manager.game_started and game_manager.game.player.hp > 0:
-                    if event.key == pygame.K_j:
-                        if game_manager.game.player.weapon.name == 'WeaponNone':
-                            game_manager.pick_up_weapon()
-                        else:
-                            game_manager.drop_weapon()
 
             if type(current_screen) == ConnectToServerMenu:
                 current_screen.event_handle(event)
             if type(current_screen) == StartServerMenu:
+                current_screen.event_handle(event)
+            if type(current_screen) == SettingsMenu:
+                current_screen.event_handle(event)
+            if type(current_screen) == GameManager:
                 current_screen.event_handle(event)
 
             if event.type == SHOW_GAME_STATISTICS:
@@ -461,6 +498,7 @@ def main(screen):
                 try:
                     SoundCore.in_game_music.music_play()
                     server, port = validate_address(event.dict['input'])
+                    game_manager.pause_menu_visible = False
                     current_screen = game_manager
                     game_manager.connect(server, port)
                 except Exception as e:
@@ -469,6 +507,17 @@ def main(screen):
             if event.type == START_SERVER_MENU_EVENT:
                 SoundCore.server_connection_music.music_play()
                 current_screen = StartServerMenu()
+
+            if event.type == START_SERVER_AT_ADDRESS:
+                try:
+                    server, port = validate_address(event.dict['input'])
+                    ServerManager.run_subprocess((server, port))
+                except Exception as e:
+                    current_screen = MessageScreen(str(e), pygame.event.Event(OPEN_CONNECTION_MENU_EVENT))
+                    print(e)
+
+            if event.type == KILL_SERVER:
+                ServerManager.kill_subprocess()
 
             if event.type == OPEN_SETTINGS_MENU_EVENT:
                 current_screen = SettingsMenu()
@@ -481,6 +530,10 @@ def main(screen):
                 else:
                     SoundCore.sound_off()
 
+            if event.type == EXIT_GAME_TO_MENU:
+                game_manager.disconnect()
+                current_screen = Menu()
+
             if event.type == CHANGE_MUSIC_MODE:
                 SoundCore.is_music_on = not SoundCore.is_music_on
                 current_screen.buttons_update()
@@ -490,16 +543,37 @@ def main(screen):
                 else:
                     SoundCore.music_off()
 
+            if event.type == CHANGE_SOUNDS_SLIDER:
+                SoundCore.change_sounds_loud(event.dict['value'])
+            if event.type == CHANGE_MUSIC_SLIDER:
+                SoundCore.change_music_loud(event.dict['value'])
         try:
+            ServerManager.check_server()
+            if WEBCAM:
+                ScriptManager.check()
+
             current_screen.draw(screen)
         except Exception as e:
             current_screen = MessageScreen(str(e), pygame.event.Event(OPEN_MAIN_MENU_EVENT))
         pygame.display.set_caption(f"{int(clock.get_fps())} FPS")
         pygame.display.flip()
-
     pygame.mixer.quit()
     pygame.quit()
 
 
 if __name__ == "__main__":
+    pygame.init()
+    pygame.mixer.init()
+
+    if FULLSCREEN:
+        config.HEIGHT = pygame.display.Info().current_h
+        config.WIDTH = pygame.display.Info().current_w
+        WIDTH = config.WIDTH
+        HEIGHT = config.HEIGHT
+        screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
+
+    else:
+        screen = pygame.display.set_mode((WIDTH, HEIGHT))
+
+    clock = pygame.time.Clock()
     main(screen)
