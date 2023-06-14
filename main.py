@@ -97,7 +97,7 @@ class Game:
         self.input_handle(time_delta)
         self.camera.update(time_delta)
         self.level.update(time_delta)
-        self.player_bar.update({'weapon_name': self.player.weapon.name, 'value': self.player.hp, 'left_ammo': self.player.weapon.ammo, 'max_ammo': Weapon.all_weapons_info[self.player.weapon.name]['PATRONS']})
+        self.player_bar.update({'weapon_name': self.player.weapon.name, 'value': self.player.hp, 'left_ammo': self.player.weapon.ammo, 'max_ammo': self.player.weapon.maximum_ammo()})
 
         for weapon_id, weapon in self.weapons.items():
             weapon.update(time_delta, self.level)
