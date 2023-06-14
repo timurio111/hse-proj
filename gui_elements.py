@@ -253,8 +253,8 @@ def get_bullet(n: int, w: int):
 class Bullets:
 
     def __init__(self):
-        self.bullet = (20, 50)
-        self.bullet_case = (20, 15)
+        self.bullet = (WIDTH // 64, HEIGHT // 14)
+        self.bullet_case = (WIDTH // 64, HEIGHT // 48)
         self.bullets = None
 
     def draw_n_bullets(self, screen, left_ammo, max_ammo, color):

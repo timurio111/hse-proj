@@ -303,7 +303,7 @@ class TextBlock:
                 self.text[i] += 's : ' + str(self.game_data[player_id][self.text[i]])
             else:
                 self.text[i] += ' : ' + str(self.game_data[player_id][self.text[i]])
-            param = TextBlock.self.font.render(self.text[i], False, WHITE)
+            param = self.font.render(self.text[i], False, WHITE)
             self.text_block.append(param)
         return self.text_block
 
