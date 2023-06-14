@@ -295,7 +295,6 @@ class AmmoBar:
             screen.blit(self.Font.render(AmmoBar.TEXT, False, RED), AmmoBar.AMMO_BAR_COORDS)
 
 
-
 class PlayerStat:
 
     def __init__(self, left_ammo, weapon, cur_hp):
