@@ -53,7 +53,7 @@ def run():
         if sender:
             sender.send(response.encode())
 
-    model = YOLO('ml/Models/classify/train11/weights/best.pt')
+    model = YOLO('ml/Models/classify/final/weights/best.pt')
     cap = cv2.VideoCapture(0)
 
     frames_counter = 0
@@ -71,7 +71,6 @@ def run():
         results = model(frame, verbose=False)
         hands_up = float(results[0].probs.data[0])
         current_status = 'normal'
-        print(f'hands_up confidence: {hands_up}')
         if hands_up >= 0.85:
             current_status = 'debuffed'
 
@@ -80,7 +79,6 @@ def run():
             frames_counter += 1
         if frames_counter >= 25:
             response = DataPacket(DataPacket.WEBCAM_RESPONSE)
-            print(f'FRAMES: {frames_counter}')
             response['data'] = 'hands up'
             response.headers['game_id'] = -1
             if sender:

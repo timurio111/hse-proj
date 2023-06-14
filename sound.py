@@ -26,7 +26,8 @@ except Exception as e:
     print(e, '<-Sound Error')
 
 
-def load_weapon_sound(name, new_names_of_sound=[]):  # передаем название папки с оружием, на выходе - три звука: перезарядка, выстрел, холостой выстрел
+def load_weapon_sound(name,
+                      new_names_of_sound=[]):  # передаем название папки с оружием, на выходе - три звука: перезарядка, выстрел, холостой выстрел
     path = os.path.join('data', 'WeaponSprites', name, 'sound')
     all_sounds = ['is_empty', 'shot', 'reload'] + new_names_of_sound
     result = {}
