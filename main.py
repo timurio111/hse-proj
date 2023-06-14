@@ -5,7 +5,7 @@ import pygame
 import config
 from config import WIDTH, HEIGHT, MAX_FPS, FULLSCREEN
 from network import Network
-from gui_elements import HpBar
+from gui_elements import PlayerStat
 
 pygame.init()
 pygame.mixer.init()
@@ -86,6 +86,7 @@ class Game:
         self.players: dict[int, Player] = {}
         self.bullets: dict[int, Bullet] = {}
         self.weapons: dict[int, Weapon] = {}
+        self.player_bar = PlayerStat(self.player.weapon.ammo, self.player.weapon.name, 100)
 
         self.camera = Camera(self.player)
 
@@ -106,6 +107,7 @@ class Game:
         self.input_handle(time_delta)
         self.camera.update(time_delta)
         self.level.update(time_delta)
+        self.player_bar.update({'value': self.player.hp, 'weapon_name': self.player.weapon.name, 'left_ammo': self.player.weapon.ammo})
 
         for weapon_id, weapon in self.weapons.items():
             weapon.update(time_delta, self.level)
@@ -138,6 +140,7 @@ class Game:
 
         image = pygame.transform.scale_by(image, self.level.scale)
         screen.blit(image, (0, 0))
+        self.player_bar.draw(screen, self.player.color)
 
     def input_handle(self, time_delta):
         keys = pygame.key.get_pressed()
@@ -399,7 +402,6 @@ class GameManager:
             self.handle_game_objects_collision()
             self.send_player_data()
             self.game.draw(screen)
-            self.hp_bar.draw(screen, {'value': self.game.player.hp})
 
 
 def validate_address(user_input):
