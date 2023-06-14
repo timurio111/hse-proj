@@ -727,7 +727,7 @@ class GameSession:
             self.game_statistics[self.game_state.players_alive.pop()]['win'] += 1
             if self.game_state.level_id == GameState.MAX_LEVELS:
                 self.game_state.lastlevel = True
-                final_level_name = 'lastmap' + str(len(self.game_state.players.keys()))
+                final_level_name = 'lastmap'
                 server_event = ServerEvent(event_type=ServerEvent.CHANGE_LEVEL,
                                            data={'level_name': final_level_name},
                                            delay=1)
