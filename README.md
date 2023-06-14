@@ -57,7 +57,7 @@ Now you have to start two ***.py files in the following order:
 - script.py
 - main.py
 
-And one of you have to configure (set custom address (don`t touch it if you want to play on the localhost) in the 18th line of server.py) and start 
+And one of you has to configure (set custom address (don`t touch it if you want to play on the localhost) in the 18th line of server.py) and start 
 
 - server.py
 
