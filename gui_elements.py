@@ -280,19 +280,21 @@ class AmmoBar:
         self.max_ammo = Weapon.all_weapons_info[weapon]['PATRONS']
         self.Font = pygame.font.Font('data/fonts/menu_font.ttf', AmmoBar.STEP)
         self.bullets = Bullets()
+        self.f1 = self.Font.render(AmmoBar.TEXT1, False, (255, 255, 255))
+        self.f2 = self.Font.render(AmmoBar.TEXT, False, RED)
 
     def update(self, changes):
         self.weapon = changes['weapon_name']
-        self.max_ammo = Weapon.all_weapons_info[changes['weapon_name']]['PATRONS']
+        self.max_ammo = changes['max_ammo']
         self.left_ammo = changes['left_ammo']
 
     def draw(self, screen, color):
         if self.left_ammo != 0:
             self.bullets.draw_n_bullets(screen, self.left_ammo, self.max_ammo, color)
         elif self.weapon == 'WeaponNone':
-            screen.blit(self.Font.render(AmmoBar.TEXT1, False, (255, 255, 255)), AmmoBar.AMMO_BAR_COORDS)
+            screen.blit(self.f1, AmmoBar.AMMO_BAR_COORDS)
         else:
-            screen.blit(self.Font.render(AmmoBar.TEXT, False, RED), AmmoBar.AMMO_BAR_COORDS)
+            screen.blit(self.f2, AmmoBar.AMMO_BAR_COORDS)
 
 
 class PlayerStat:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import config
+import pygame
 
 pygame.init()
 pygame.mixer.init()
@@ -96,7 +97,7 @@ class Game:
         self.input_handle(time_delta)
         self.camera.update(time_delta)
         self.level.update(time_delta)
-        self.player_bar.update({'weapon_name': self.player.weapon, 'value': self.player.hp, 'left_ammo': self.player.weapon.ammo})
+        self.player_bar.update({'weapon_name': self.player.weapon.name, 'value': self.player.hp, 'left_ammo': self.player.weapon.ammo, 'max_ammo': Weapon.all_weapons_info[self.player.weapon.name]['PATRONS']})
 
         for weapon_id, weapon in self.weapons.items():
             weapon.update(time_delta, self.level)
