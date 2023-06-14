@@ -7,7 +7,7 @@ pygame.init()
 pygame.mixer.init()
 
 from config import WIDTH, HEIGHT, MAX_FPS, FULLSCREEN, WEBCAM
-from gui_elements import HpBar
+from gui_elements import PlayerStat
 from network import Network
 from event_codes import *
 from level import Level, Tile
@@ -76,6 +76,7 @@ class Game:
         self.players: dict[int, Player] = {}
         self.bullets: dict[int, Bullet] = {}
         self.weapons: dict[int, Weapon] = {}
+        self.player_bar = PlayerStat(self.player.weapon.ammo, self.player.weapon.name, 100)
 
         self.camera = Camera(self.player)
 
@@ -96,6 +97,7 @@ class Game:
         self.input_handle(time_delta)
         self.camera.update(time_delta)
         self.level.update(time_delta)
+        self.player_bar.update({'weapon_name': self.player.weapon.name, 'value': self.player.hp, 'left_ammo': self.player.weapon.ammo, 'max_ammo': self.player.weapon.maximum_ammo()})
 
         for weapon_id, weapon in self.weapons.items():
             weapon.update(time_delta, self.level)
@@ -128,6 +130,7 @@ class Game:
 
         image = pygame.transform.scale_by(image, self.level.scale)
         screen.blit(image, (0, 0))
+        self.player_bar.draw(screen, self.player.color)
 
     def input_handle(self, time_delta):
         keys = pygame.key.get_pressed()
@@ -208,7 +211,6 @@ class GameManager:
         self.game_started = False
 
         self.webcam_ready = False
-        self.hp_bar = HpBar(100)
 
         self.disconnected = True
         self.pause_menu_visible = False
@@ -423,8 +425,7 @@ class GameManager:
             self.handle_game_objects_collision()
             self.send_player_data()
             self.game.draw(screen)
-            self.hp_bar.draw(screen, {'value': self.game.player.hp})
-            
+
             if self.pause_menu_visible:
                 self.pause_menu.draw(screen)
 

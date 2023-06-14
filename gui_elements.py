@@ -8,6 +8,7 @@ RED = (255, 0, 0)
 GRAY = (125, 125, 125)
 YELLOW = (255, 255, 0)
 GREEN = (0, 255, 0)
+ORANGE = (255, 69, 0)
 
 
 class TextInput:
@@ -202,8 +203,8 @@ class TextBox:
 
 
 class Bar:
-    BAR_SIZE = (WIDTH // 10, HEIGHT // 80)
-    BAR_THICKNESS = 2
+    BAR_SIZE = (WIDTH // 3, HEIGHT // 20)
+    BAR_THICKNESS = 5
 
     def __init__(self, x, y, cur_value, max_value, color):
         self.x = x
@@ -218,10 +219,9 @@ class Bar:
         self.current_value = change['value']
         self.bar = pygame.rect.Rect((self.x, self.y, Bar.BAR_SIZE[0] * self.current_value // self.max_value, Bar.BAR_SIZE[1]))
 
-    def draw(self, screen: pygame.Surface, change):
-        self.update(change)
+    def draw(self, screen: pygame.Surface):
         pygame.draw.rect(screen, self.color, self.bar)
-        pygame.draw.rect(screen, self.color, self.bar_background, Bar.BAR_THICKNESS)
+        pygame.draw.rect(screen, GRAY, self.bar_background, Bar.BAR_THICKNESS)
 
 
 class HpBar(Bar):
@@ -233,13 +233,81 @@ class HpBar(Bar):
     def __init__(self, cur_hp):
         Bar.__init__(self, HpBar.HP_BAR_COORD[0], HpBar.HP_BAR_COORD[1], cur_hp, HpBar.MAX_HP, GREEN)
 
-    def update(self, change):
-        super().update(change)
+    def update(self, changes):
+        super().update(changes)
         if HpBar.RED_MARK < self.current_value <= HpBar.YELLOW_MARK:
             self.color = YELLOW
-        elif self.current_value < HpBar.RED_MARK:
+        elif self.current_value <= HpBar.RED_MARK:
             self.color = RED
         else:
             self.color = GREEN
 
+
+def get_bullet(n: int, w: int):
+    coord = (HpBar.HP_BAR_COORD[0], HpBar.HP_BAR_COORD[1] + HEIGHT // 12)
+    for i in range(n):
+        yield coord
+        coord = (coord[0] + w + 2, coord[1])
+
+
+class Bullets:
+
+    def __init__(self):
+        self.bullet = (WIDTH // 64, HEIGHT // 14)
+        self.bullet_case = (WIDTH // 64, HEIGHT // 48)
+        self.bullets = None
+
+    def draw_n_bullets(self, screen, left_ammo, max_ammo, color):
+        self.bullets = get_bullet(max_ammo, self.bullet_case[0])
+        for i, coords in enumerate(self.bullets):
+            if i < left_ammo:
+                pygame.draw.rect(screen, color, coords + self.bullet)
+                pygame.draw.rect(screen, tuple([int(i * 0.75) for i in color]), coords + self.bullet_case)
+            else:
+                pygame.draw.rect(screen, GRAY, coords + self.bullet)
+                pygame.draw.rect(screen, (36, 36, 36), coords + self.bullet_case)
+
+
+class AmmoBar:
+    STEP = HEIGHT//12
+    AMMO_BAR_COORDS = (HpBar.HP_BAR_COORD[0], HpBar.HP_BAR_COORD[1] + STEP)
+    TEXT = 'Hands Up'
+    TEXT1 = 'Find Weapon'
+
+    def __init__(self, left_ammo, weapon):
+        self.weapon = weapon
+        self.left_ammo = left_ammo
+        self.max_ammo = Weapon.all_weapons_info[weapon]['PATRONS']
+        self.Font = pygame.font.Font('data/fonts/menu_font.ttf', AmmoBar.STEP)
+        self.bullets = Bullets()
+        self.f1 = self.Font.render(AmmoBar.TEXT1, False, (255, 255, 255))
+        self.f2 = self.Font.render(AmmoBar.TEXT, False, RED)
+
+    def update(self, changes):
+        self.weapon = changes['weapon_name']
+        self.max_ammo = changes['max_ammo']
+        self.left_ammo = changes['left_ammo']
+
+    def draw(self, screen, color):
+        if self.left_ammo != 0:
+            self.bullets.draw_n_bullets(screen, self.left_ammo, self.max_ammo, color)
+        elif self.weapon == 'WeaponNone':
+            screen.blit(self.f1, AmmoBar.AMMO_BAR_COORDS)
+        else:
+            screen.blit(self.f2, AmmoBar.AMMO_BAR_COORDS)
+
+
+class PlayerStat:
+
+    def __init__(self, left_ammo, weapon, cur_hp):
+        self.hp_bar = HpBar(cur_hp)
+        self.ammo_bar = AmmoBar(left_ammo, weapon)
+
+    def update(self, changes):
+        self.hp_bar.update(changes)
+        self.ammo_bar.update(changes)
+
+    def draw(self, screen, color):
+        self.hp_bar.draw(screen)
+        self.ammo_bar.draw(screen, color)
 
