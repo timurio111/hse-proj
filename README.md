@@ -52,11 +52,14 @@ pip install -r requirements.txt
 to the terminal
 
 So, if you are fine with previous steps, then you are almost up to play!
-Now you have to start three ***.py files in the following order:
+Now you have to start two ***.py files in the following order:
 
-- server.py
 - script.py
 - main.py
+
+And one of you have to configure (set custom address (don`t touch it if you want to play on the localhost) in the 18th line of server.py) and start 
+
+- server.py
 
 The last step you have to do is set up your webcam right in front of your face and make sure both of your palms
 fit into the frame.
