@@ -130,7 +130,8 @@ class Game:
 
         image = pygame.transform.scale_by(image, self.level.scale)
         screen.blit(image, (0, 0))
-        self.player_bar.draw(screen, self.player.color)
+        if self.level.info['name'] != 'lobby' and 'lastmap' not in self.level.info['name']:
+            self.player_bar.draw(screen, self.player.color)
 
     def input_handle(self, time_delta):
         keys = pygame.key.get_pressed()
